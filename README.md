@@ -39,7 +39,7 @@ Jarvis: Здравствуйте! Чем я могу вам помочь?
 
 ## Prerequisites
 
-- **Python 3.10+** (managed with [uv](https://docs.astral.sh/uv/))
+- **Python 3.14+** (managed with [uv](https://docs.astral.sh/uv/))
 - **LM Studio** (or any OpenAI-compatible API) — for LLM
 - **Internet connection** — for TTS voice generation (first time; models cache)
 
