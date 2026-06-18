@@ -9,44 +9,72 @@ load_dotenv()
 
 class Speaker:
     def __init__(self):
+        self.playback_process = None
+        self.current_file = None
+
+    def generate_speech(self, text: str) -> str:
+        """Generate TTS audio file and return the path. Blocks until done."""
         backend = os.getenv("TTS_BACKEND", "edge").lower()
-        self.backend = backend
 
-        if backend == "yandex":
-            self.speak_func = self._speak_yandex
-        elif backend == "macos":
-            self.speak_func = self._speak_macos
-        elif backend == "print":
-            self.speak_func = self._speak_print
+        if backend == "edge":
+            return self._generate_edge(text)
+        elif backend == "yandex":
+            return self._generate_yandex(text)
         else:
-            # Default: edge-tts
-            self.speak_func = self._speak_edge
+            # Fallback: print only
+            return ""
 
-    def speak(self, text: str):
-        self.speak_func(text)
-
-    def _play_audio(self, file_path: str):
-        """Play an audio file using system player."""
-        if not os.path.exists(file_path):
+    def play_async(self, file_path: str):
+        """Start playing audio in background. Returns immediately."""
+        if not file_path or not os.path.exists(file_path):
             return
         try:
             if os.uname().sysname == "Darwin":
-                subprocess.run(["afplay", file_path], check=True)
-            else:
-                # Try ffplay, then aplay as fallback
-                if shutil.which("ffplay"):
-                    subprocess.run(["ffplay", "-nodisp", "-autoexit", file_path],
-                                   check=True, capture_output=True)
-                elif shutil.which("aplay"):
-                    subprocess.run(["aplay", file_path], check=True)
-                else:
-                    print(f"  (audio saved to {file_path})")
+                self.playback_process = subprocess.Popen(["afplay", file_path])
+            elif shutil.which("ffplay"):
+                self.playback_process = subprocess.Popen(
+                    ["ffplay", "-nodisp", "-autoexit", file_path],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+            elif shutil.which("aplay"):
+                self.playback_process = subprocess.Popen(["aplay", file_path])
+            self.current_file = file_path
         except Exception as e:
             print(f"  Playback error: {e}")
+            self.playback_process = None
 
-    # ---------- Backend: edge-tts ----------
-    def _speak_edge(self, text: str):
+    def stop_playback(self):
+        """Stop currently playing audio."""
+        if self.playback_process and self.playback_process.poll() is None:
+            self.playback_process.terminate()
+            try:
+                self.playback_process.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                self.playback_process.kill()
+            self.playback_process = None
+
+    def is_playing(self) -> bool:
+        """Check if audio is currently playing."""
+        return (self.playback_process is not None and
+                self.playback_process.poll() is None)
+
+    def speak(self, text: str):
+        """Simple blocking speak (for non-interrupted use)."""
         print(f"Jarvis: {text}")
+
+        backend = os.getenv("TTS_BACKEND", "edge").lower()
+        if backend == "print":
+            return
+
+        file_path = self.generate_speech(text)
+        self.play_async(file_path)
+
+        # Wait for playback to finish (blocking)
+        if self.playback_process:
+            self.playback_process.wait()
+
+    def _generate_edge(self, text: str) -> str:
+        """Generate speech using edge-tts, return file path."""
         try:
             import edge_tts
             voice = os.getenv("TTS_VOICE", "en-US-JennyNeural")
@@ -54,29 +82,25 @@ class Speaker:
             asyncio.run(
                 edge_tts.Communicate(text, voice=voice).save(file_path)
             )
-            self._play_audio(file_path)
+            return file_path
         except Exception as e:
-            print(f"  TTS error: {e}")
+            print(f"  TTS generation error: {e}")
+            return ""
 
-    # ---------- Backend: Yandex SpeechKit ----------
-    def _speak_yandex(self, text: str):
-        print(f"Jarvis: {text}")
+    def _generate_yandex(self, text: str) -> str:
+        """Generate speech using Yandex SpeechKit, return file path."""
         import httpx
-
         api_key = os.getenv("YC_API_KEY") or os.getenv("YC_IAM_TOKEN")
         folder_id = os.getenv("YC_FOLDER_ID")
         voice = os.getenv("TTS_VOICE", "alisa")
         lang = os.getenv("TTS_LANG", "ru-RU")
 
         if not api_key or not folder_id:
-            print("  Error: YC_API_KEY and YC_FOLDER_ID must be set in .env for Yandex TTS")
-            return
+            print("  Error: YC_API_KEY and YC_FOLDER_ID must be set in .env")
+            return ""
 
         try:
-            # Yandex SpeechKit v1 REST API
             url = "https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize"
-
-            # Determine auth type
             if os.getenv("YC_API_KEY"):
                 headers = {"Authorization": f"Api-Key {api_key}"}
             else:
@@ -98,29 +122,8 @@ class Speaker:
                 response.raise_for_status()
                 with open(file_path, "wb") as f:
                     f.write(response.content)
-
-            self._play_audio(file_path)
+            return file_path
 
         except Exception as e:
             print(f"  Yandex TTS error: {e}")
-
-    # ---------- Backend: macOS say ----------
-    def _speak_macos(self, text: str):
-        print(f"Jarvis: {text}")
-        try:
-            voice = os.getenv("TTS_VOICE", "")
-            if voice:
-                subprocess.run(["say", "-v", voice, text], check=True)
-            else:
-                subprocess.run(["say", text], check=True)
-        except Exception as e:
-            print(f"  macOS TTS error: {e}")
-
-    # ---------- Backend: print only ----------
-    def _speak_print(self, text: str):
-        print(f"Jarvis: {text}")
-
-
-if __name__ == "__main__":
-    speaker = Speaker()
-    speaker.speak("Hello, I am Jarvis. How can I help you today?")
+            return ""

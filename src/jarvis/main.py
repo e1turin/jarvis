@@ -19,28 +19,32 @@ def main():
 
     print(f"System ready. Provider: {os.getenv('LLM_PROVIDER')} | Model: {brain.model}")
 
+    # Create a wake word detector for barge-in (shared model)
+    barge_detector = WakeWordDetector() if wake_mode else None
+
     if wake_mode:
-        detector = WakeWordDetector()
+        # Main wake word detector for initial activation
+        wake_detector = WakeWordDetector()
         print("Say 'Jarvis' or 'Джарвис' to wake me up.")
     else:
-        detector = None
+        wake_detector = None
 
     while True:
         try:
-            # --- Step 1: Wait for wake word ---
-            if wake_mode and detector:
-                detected = detector.wait_for_wake_word()
+            # --- Wait for wake word ---
+            if wake_mode and wake_detector:
+                detected = wake_detector.wait_for_wake_word()
                 if not detected:
                     break
 
-            # --- Step 2: Conversation mode ---
-            print("🎙️ Conversation started. I'll stay awake.")
-            print(f"   Say 'пока' or be silent for {conversation_timeout}s to end.\n")
+            # --- Conversation mode with barge-in ---
+            print("🎙️ Conversation started. Say 'Джарвис' to interrupt me.\n")
 
             last_activity = time.time()
             should_sleep = False
 
             while not should_sleep:
+                # Listen
                 audio_file = listener.record_audio()
                 user_text = listener.transcribe(audio_file)
 
@@ -64,13 +68,42 @@ def main():
 
                 print(f"You: {user_text}")
                 result = brain.chat(user_text)
-                speaker.speak(result.text)
 
                 if result.action == "end":
+                    speaker.speak(result.text)
                     print("💤 LLM ended the conversation.\n")
                     should_sleep = True
+                    break
 
-                print()
+                # --- Speak with barge-in support ---
+                print(f"Jarvis: {result.text}")
+
+                backend = os.getenv("TTS_BACKEND", "edge").lower()
+                if backend == "print":
+                    print()
+                    continue
+
+                # Generate audio
+                file_path = speaker.generate_speech(result.text)
+                if not file_path:
+                    print()
+                    continue
+
+                # Play and monitor for barge-in (persistent stream, no blinking)
+                speaker.play_async(file_path)
+                interrupted = False
+
+                if barge_detector and speaker.is_playing():
+                    interrupted = barge_detector.wait_for_barge_in(speaker.is_playing)
+
+                if interrupted:
+                    speaker.stop_playback()
+                    print("⏹️ Interrupted!\n")
+                else:
+                    # Wait for playback to finish
+                    if speaker.playback_process:
+                        speaker.playback_process.wait()
+                    print()
 
         except KeyboardInterrupt:
             print("\nShutting down...")
