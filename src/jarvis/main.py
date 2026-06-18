@@ -92,11 +92,17 @@ def main():
                     print()
                     continue
 
+                # Check if response contains wake words (would cause self-interruption via echo)
+                response_mentions_wake = False
+                if barge_detector and result.text:
+                    text_lower = result.text.lower()
+                    response_mentions_wake = any(ww in text_lower for ww in barge_detector.wake_words)
+
                 # Play and monitor for barge-in (persistent stream, no blinking)
                 speaker.play_async(file_path)
                 interrupted = False
 
-                if barge_detector and speaker.is_playing():
+                if barge_detector and speaker.is_playing() and not response_mentions_wake:
                     interrupted = barge_detector.wait_for_barge_in(speaker.is_playing)
 
                 if interrupted:

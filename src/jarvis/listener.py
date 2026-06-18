@@ -53,6 +53,7 @@ class Listener:
         """
         Record with Voice Activity Detection.
         Starts recording when sound is detected, stops after silence_timeout seconds of quiet.
+        If no speech is detected within `duration` seconds, returns empty.
         """
         filename = "temp_audio.wav"
         print(f"🎤 Listening (VAD, silence timeout: {self.silence_timeout}s)...")
@@ -60,11 +61,14 @@ class Listener:
         # Use a small buffer and detect energy
         block_size = int(0.05 * self.sample_rate)  # 50ms blocks
         threshold = self.vad_threshold  # Energy threshold for voice activity
+        block_interval = 0.05  # seconds per block
 
         audio_buffer = []
         speech_detected = False
         silence_frames = 0
-        silence_limit = int(self.silence_timeout / 0.05)  # blocks of silence before stopping
+        silence_limit = int(self.silence_timeout / block_interval)  # blocks of silence before stopping
+        max_silent_blocks = int(self.duration / block_interval)  # total silent blocks before giving up
+        total_blocks = 0
 
         try:
             with sd.InputStream(samplerate=self.sample_rate,
@@ -82,7 +86,12 @@ class Listener:
                         silence_frames = 0
                         audio_buffer.append(block)
                     else:
-                        if speech_detected:
+                        if not speech_detected:
+                            total_blocks += 1
+                            if total_blocks >= max_silent_blocks:
+                                print("   ⏱️ No speech detected")
+                                break
+                        else:
                             silence_frames += 1
                             if silence_frames >= silence_limit:
                                 print("   ✅ Done")
@@ -93,7 +102,10 @@ class Listener:
             print("   ⏹️ Stopped")
 
         if not audio_buffer:
-            return filename  # Return empty file
+            # No speech captured — remove stale audio to avoid re-transcribing old data
+            if os.path.exists(filename):
+                os.remove(filename)
+            return filename
 
         recording = np.concatenate(audio_buffer)
         wavfile.write(filename, self.sample_rate, recording.flatten())
