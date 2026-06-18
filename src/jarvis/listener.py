@@ -14,6 +14,7 @@ class Listener:
         self.duration = duration
         self.vad_mode = os.getenv("VAD_MODE", "true").lower() == "true"
         self.silence_timeout = float(os.getenv("VAD_SILENCE_TIMEOUT", "1.5"))
+        self.vad_threshold = float(os.getenv("VAD_THRESHOLD", "0.02"))
 
         if provider == "lmstudio":
             from faster_whisper import WhisperModel
@@ -58,15 +59,12 @@ class Listener:
 
         # Use a small buffer and detect energy
         block_size = int(0.05 * self.sample_rate)  # 50ms blocks
-        threshold = 0.02  # Energy threshold for voice activity
+        threshold = self.vad_threshold  # Energy threshold for voice activity
 
         audio_buffer = []
         speech_detected = False
         silence_frames = 0
         silence_limit = int(self.silence_timeout / 0.05)  # blocks of silence before stopping
-
-        # Print a subtle indicator that we're waiting
-        print("   Waiting for speech...", end="", flush=True)
 
         try:
             with sd.InputStream(samplerate=self.sample_rate,
@@ -80,22 +78,19 @@ class Listener:
                     if energy > threshold:
                         if not speech_detected:
                             speech_detected = True
-                            print("\r   🔴 Recording...        ", end="", flush=True)
+                            print("   🔴 Listening...")
                         silence_frames = 0
                         audio_buffer.append(block)
                     else:
                         if speech_detected:
                             silence_frames += 1
                             if silence_frames >= silence_limit:
-                                print("\r   ✅ Done                ")
+                                print("   ✅ Done")
                                 break
                             audio_buffer.append(block)  # keep a bit of silence
-                        else:
-                            # Not yet started, show waiting dots
-                            print(".", end="", flush=True)
 
         except KeyboardInterrupt:
-            print("\r   ⏹️ Stopped                ")
+            print("   ⏹️ Stopped")
 
         if not audio_buffer:
             return filename  # Return empty file
