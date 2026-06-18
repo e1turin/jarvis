@@ -1,19 +1,14 @@
-import os
 import json
 import sounddevice as sd
-from dotenv import load_dotenv
 from vosk import Model, KaldiRecognizer
-
-load_dotenv()
+from jarvis.config import settings
 
 
 class WakeWordDetector:
     def __init__(self):
         self.sample_rate = 16000
-        model_path = os.getenv("VOSK_MODEL_PATH", "vosk-model-small-ru-0.22")
-        self.model = Model(model_path)
-        wake_words_str = os.getenv("WAKE_WORDS", "джарвис")
-        self.wake_words = [w.strip().lower() for w in wake_words_str.split(",")]
+        self.model = Model(settings.vosk_model_path)
+        self.wake_words = settings.wake_words
         print(f"🔊 Vosk model loaded | Wake words: {', '.join(self.wake_words)}")
 
     def wait_for_wake_word(self) -> bool:

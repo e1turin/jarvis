@@ -1,12 +1,10 @@
-import os
 import time
-from dotenv import load_dotenv
 from jarvis.brain import JarvisBrain
 from jarvis.listener import Listener
 from jarvis.speaker import Speaker
 from jarvis.wake import WakeWordDetector
-
-load_dotenv()
+from jarvis.sounds import play_listen_sound, play_thinking_ticks, stop_thinking_ticks
+from jarvis.config import settings
 
 
 def main():
@@ -17,15 +15,12 @@ def main():
     listener = Listener()
     speaker = Speaker()
 
-    wake_mode = os.getenv("WAKE_MODE", "true").lower() == "true"
-    conversation_timeout = int(os.getenv("CONVERSATION_TIMEOUT", "30"))
-
-    print(f"System ready. Provider: {os.getenv('LLM_PROVIDER')} | Model: {brain.model}")
+    print(f"System ready. Provider: {settings.llm_provider} | Model: {brain.model}")
 
     # Create a wake word detector for barge-in (shared model)
-    barge_detector = WakeWordDetector() if wake_mode else None
+    barge_detector = WakeWordDetector() if settings.wake_mode else None
 
-    if wake_mode:
+    if settings.wake_mode:
         # Main wake word detector for initial activation
         wake_detector = WakeWordDetector()
         print("Say 'Jarvis' or 'Джарвис' to wake me up.")
@@ -35,12 +30,13 @@ def main():
     while True:
         try:
             # --- Wait for wake word ---
-            if wake_mode and wake_detector:
+            if settings.wake_mode and wake_detector:
                 detected = wake_detector.wait_for_wake_word()
                 if not detected:
                     break
 
             # --- Conversation mode with barge-in ---
+            play_listen_sound()
             print("🎙️ Conversation started. Say 'Джарвис' to interrupt me.\n")
 
             last_activity = time.time()
@@ -52,7 +48,7 @@ def main():
                 user_text = listener.transcribe(audio_file)
 
                 if not user_text:
-                    if time.time() - last_activity >= conversation_timeout:
+                    if time.time() - last_activity >= settings.conversation_timeout:
                         print("💤 Timeout — going back to sleep.\n")
                         should_sleep = True
                     continue
@@ -70,7 +66,9 @@ def main():
                     break
 
                 print(f"You: {user_text}")
+                play_thinking_ticks()
                 result = brain.chat(user_text)
+                stop_thinking_ticks()
 
                 if result.action == "end":
                     speaker.speak(result.text)
@@ -81,8 +79,7 @@ def main():
                 # --- Speak with barge-in support ---
                 print(f"Jarvis: {result.text}")
 
-                backend = os.getenv("TTS_BACKEND", "edge").lower()
-                if backend == "print":
+                if settings.tts_backend == "print":
                     print()
                     continue
 

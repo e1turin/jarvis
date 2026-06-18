@@ -20,6 +20,8 @@ recordings/
 temp_audio.wav
 temp_response.mp3
 temp_response.ogg
+temp_listen.wav
+temp_tick.wav
 
 # Environment files (private)
 .env

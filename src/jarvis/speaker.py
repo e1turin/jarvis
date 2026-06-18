@@ -2,9 +2,7 @@ import os
 import subprocess
 import asyncio
 import shutil
-from dotenv import load_dotenv
-
-load_dotenv()
+from jarvis.config import settings
 
 
 class Speaker:
@@ -14,11 +12,9 @@ class Speaker:
 
     def generate_speech(self, text: str) -> str:
         """Generate TTS audio file and return the path. Blocks until done."""
-        backend = os.getenv("TTS_BACKEND", "edge").lower()
-
-        if backend == "edge":
+        if settings.tts_backend == "edge":
             return self._generate_edge(text)
-        elif backend == "yandex":
+        elif settings.tts_backend == "yandex":
             return self._generate_yandex(text)
         else:
             # Fallback: print only
@@ -62,8 +58,7 @@ class Speaker:
         """Simple blocking speak (for non-interrupted use)."""
         print(f"Jarvis: {text}")
 
-        backend = os.getenv("TTS_BACKEND", "edge").lower()
-        if backend == "print":
+        if settings.tts_backend == "print":
             return
 
         file_path = self.generate_speech(text)
@@ -77,10 +72,9 @@ class Speaker:
         """Generate speech using edge-tts, return file path."""
         try:
             import edge_tts
-            voice = os.getenv("TTS_VOICE", "en-US-JennyNeural")
             file_path = "temp_response.mp3"
             asyncio.run(
-                edge_tts.Communicate(text, voice=voice).save(file_path)
+                edge_tts.Communicate(text, voice=settings.tts_voice).save(file_path)
             )
             return file_path
         except Exception as e:
@@ -90,10 +84,10 @@ class Speaker:
     def _generate_yandex(self, text: str) -> str:
         """Generate speech using Yandex SpeechKit, return file path."""
         import httpx
-        api_key = os.getenv("YC_API_KEY") or os.getenv("YC_IAM_TOKEN")
-        folder_id = os.getenv("YC_FOLDER_ID")
-        voice = os.getenv("TTS_VOICE", "alisa")
-        lang = os.getenv("TTS_LANG", "ru-RU")
+        api_key = settings.yc_api_key
+        folder_id = settings.yc_folder_id
+        voice = settings.tts_voice or "alisa"
+        lang = settings.tts_lang
 
         if not api_key or not folder_id:
             print("  Error: YC_API_KEY and YC_FOLDER_ID must be set in .env")
@@ -101,10 +95,7 @@ class Speaker:
 
         try:
             url = "https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize"
-            if os.getenv("YC_API_KEY"):
-                headers = {"Authorization": f"Api-Key {api_key}"}
-            else:
-                headers = {"Authorization": f"Bearer {api_key}"}
+            headers = {"Authorization": f"Api-Key {api_key}"}
 
             data = {
                 "text": text,

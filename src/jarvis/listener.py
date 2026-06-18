@@ -2,32 +2,26 @@ import os
 import numpy as np
 import sounddevice as sd
 from scipy.io import wavfile
-from dotenv import load_dotenv
-
-load_dotenv()
+from jarvis.config import settings
 
 
 class Listener:
     def __init__(self, sample_rate: int = 16000, duration: int = 5):
-        provider = os.getenv("LLM_PROVIDER", "openai").lower()
         self.sample_rate = sample_rate
         self.duration = duration
-        self.vad_mode = os.getenv("VAD_MODE", "true").lower() == "true"
-        self.silence_timeout = float(os.getenv("VAD_SILENCE_TIMEOUT", "1.5"))
-        self.vad_threshold = float(os.getenv("VAD_THRESHOLD", "0.02"))
+        self.vad_mode = settings.vad_mode
+        self.silence_timeout = settings.vad_silence_timeout
+        self.vad_threshold = settings.vad_threshold
 
-        if provider == "lmstudio":
+        if settings.llm_provider == "lmstudio":
             from faster_whisper import WhisperModel
-            model_size = os.getenv("STT_MODEL", "base")
-            self.model = WhisperModel(model_size, device="cpu", compute_type="int8")
+            self.model = WhisperModel(settings.stt_model, device="cpu", compute_type="int8")
             self.transcriber = self._transcribe_local
         else:
             from openai import OpenAI
-            base_url = os.getenv("LLM_BASE_URL")
-            api_key = os.getenv("LLM_API_KEY")
             self.client = OpenAI(
-                base_url=base_url,
-                api_key=os.getenv("OPENAI_API_KEY") or api_key
+                base_url=settings.llm_base_url or None,
+                api_key=settings.openai_api_key or settings.llm_api_key,
             )
             self.transcriber = self._transcribe_api
 

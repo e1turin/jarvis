@@ -165,10 +165,12 @@ All settings live in `.env`. See `.env.example` for all options.
 | `VAD_SILENCE_TIMEOUT` | `1.5` | Silence duration (s) before recording stops |
 | `VAD_THRESHOLD` | `0.02` | Energy threshold (lower = more sensitive) |
 | `TTS_BACKEND` | `edge` | `edge`, `yandex`, or `print` (no audio) |
-| `TTS_VOICE` | `en-US-JennyNeural` | Voice name for TTS |
+| `TTS_VOICE` | `ru-RU-SvetlanaNeural` | Voice name for TTS |
 | `WAKE_MODE` | `true` | Enable wake word detection |
 | `WAKE_WORDS` | `джарвис` | Comma-separated wake words |
 | `VOSK_MODEL_PATH` | `vosk-model-small-ru-0.22` | Path to Vosk model directory |
+| `TICK_VIBRO` | `false` | Use system beep for tick (may trigger haptic on Force Touch Macs) |
+| `SYSTEM_PROMPT_PATH` | `src/jarvis/prompt.txt` | Path to system prompt text file |
 | `CONVERSATION_TIMEOUT` | `30` | Inactivity timeout (s) before sleep |
 
 ### TTS Voices
@@ -196,22 +198,25 @@ This records a 3-second sample, saves it to `recordings/`, and tests if Vosk det
 
 ```
 jarvis/
-├── .env.example          # Configuration template
+├── .env.example            # Configuration template
 ├── .gitignore
-├── .python-version       # Python version for uv
+├── .python-version         # Python version for uv
 ├── README.md
-├── pyproject.toml        # Dependencies & build config
-├── vosk-model-small-ru-0.22/   # Vosk model (downloaded separately)
+├── pyproject.toml          # Dependencies & build config
+├── vosk-model-small-ru-0.22/     # Vosk model (downloaded separately)
 ├── tools/
-│   └── record_wake.py    # Wake word testing utility
+│   └── record_wake.py      # Wake word testing utility
 └── src/
     └── jarvis/
         ├── __init__.py
-        ├── main.py       # Orchestrator — wake → converse → sleep
-        ├── brain.py      # LLM client + system prompt + [END] parsing
-        ├── listener.py   # VAD recording + Whisper STT
-        ├── speaker.py    # TTS generation + async playback
-        └── wake.py       # Vosk wake word + barge-in detection
+        ├── config.py        # Centralized config (typed, from .env)
+        ├── main.py          # Orchestrator — wake → converse → sleep
+        ├── brain.py         # LLM client + [END] parsing
+        ├── listener.py      # VAD recording + Whisper STT
+        ├── prompt.txt       # System prompt (editable text file)
+        ├── sounds.py        # Audio feedback cues (beep, ticks)
+        ├── speaker.py       # TTS generation + async playback
+        └── wake.py          # Vosk wake word + barge-in detection
 ```
 
 ### Architecture

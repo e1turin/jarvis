@@ -1,32 +1,7 @@
-import os
 from typing import List
 from openai import OpenAI, APIError, APITimeoutError, APIConnectionError
-from dotenv import load_dotenv
 from pydantic import BaseModel
-
-load_dotenv()
-
-SYSTEM_PROMPT = (
-    "You are Jarvis (Джарвис), a voice AI assistant. "
-    "Your name is Jarvis, pronounced 'Джарвис' in Russian. "
-    "\n\n"
-    "IMPORTANT CONTEXT:\n"
-    "- The user is speaking to you with their voice. "
-    "- Their speech is converted to text by an automatic speech recognition system. "
-    "- Your response will be read aloud by a speech synthesizer (TTS). "
-    "- You CAN hear them. You ARE in a conversation. Just respond naturally.\n"
-    "\n"
-    "RULES:\n"
-    "1. PLAIN TEXT ONLY. Never use markdown, bold, italics, asterisks, "
-    "   or any formatting. Your text is spoken aloud.\n"
-    "2. No emojis. No bullet points. No numbered lists.\n"
-    "3. Respond in the same language the user speaks to you.\n"
-    "4. Keep responses concise and conversational, like a spoken dialogue.\n"
-    "\n"
-    "CONVERSATION CONTROL:\n"
-    "If the conversation is naturally finished and the user has no more questions, "
-    'end your response with "[END]". Do NOT use [END] if the user might have follow-up questions.'
-)
+from jarvis.config import settings
 
 
 class Message(BaseModel):
@@ -41,10 +16,9 @@ class ChatResult(BaseModel):
 
 class JarvisBrain:
     def __init__(self, model: str = None):
-        provider = os.getenv("LLM_PROVIDER", "openai").lower()
-        base_url = os.getenv("LLM_BASE_URL")
-        api_key = os.getenv("LLM_API_KEY")
-        model_name = model or os.getenv("LLM_MODEL") or "gpt-4o"
+        base_url = settings.llm_base_url or None
+        api_key = settings.llm_api_key
+        model_name = model or settings.llm_model
 
         client_kwargs = {
             "base_url": base_url,
@@ -52,16 +26,17 @@ class JarvisBrain:
             "max_retries": 1,
         }
 
-        if provider == "lmstudio":
+        if settings.llm_provider == "lmstudio":
             client_kwargs["api_key"] = api_key or "lm-studio"
         else:
-            client_kwargs["api_key"] = os.getenv("OPENAI_API_KEY") or api_key
+            client_kwargs["api_key"] = settings.openai_api_key or api_key
 
         self.client = OpenAI(**client_kwargs)
         self.model = model_name
 
+        system_prompt = settings.load_system_prompt()
         self.history: List[Message] = [
-            Message(role="system", content=SYSTEM_PROMPT)
+            Message(role="system", content=system_prompt)
         ]
 
     def chat(self, user_input: str) -> ChatResult:
