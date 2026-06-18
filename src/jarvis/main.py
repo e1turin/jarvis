@@ -1,4 +1,5 @@
 import os
+import time
 from jarvis.brain import JarvisBrain
 from jarvis.listener import Listener
 from jarvis.speaker import Speaker
@@ -14,39 +15,62 @@ def main():
     speaker = Speaker()
 
     wake_mode = os.getenv("WAKE_MODE", "true").lower() == "true"
-    input_mode = os.getenv("INPUT_MODE", "vad").lower()
+    conversation_timeout = int(os.getenv("CONVERSATION_TIMEOUT", "30"))
 
     print(f"System ready. Provider: {os.getenv('LLM_PROVIDER')} | Model: {brain.model}")
 
     if wake_mode:
         detector = WakeWordDetector()
-        print("Say 'Jarvis' or 'Джарвис' to activate.")
+        print("Say 'Jarvis' or 'Джарвис' to wake me up.")
     else:
         detector = None
-        print(f"Input mode: {input_mode.upper()}")
 
     while True:
         try:
-            # --- Wait for wake word (if enabled) ---
+            # --- Step 1: Wait for wake word ---
             if wake_mode and detector:
                 detected = detector.wait_for_wake_word()
                 if not detected:
-                    break  # User pressed Ctrl+C
+                    break
 
-            # --- Conversation mode ---
-            if input_mode == "key":
-                input("⏎ Press Enter to speak...")
+            # --- Step 2: Conversation mode ---
+            print("🎙️ Conversation started. I'll stay awake.")
+            print(f"   Say 'пока' or be silent for {conversation_timeout}s to end.\n")
 
-            audio_file = listener.record_audio()
-            user_text = listener.transcribe(audio_file)
+            last_activity = time.time()
+            should_sleep = False
 
-            if not user_text:
-                continue
+            while not should_sleep:
+                audio_file = listener.record_audio()
+                user_text = listener.transcribe(audio_file)
 
-            print(f"You: {user_text}")
+                if not user_text:
+                    if time.time() - last_activity >= conversation_timeout:
+                        print("💤 Timeout — going back to sleep.\n")
+                        should_sleep = True
+                    continue
 
-            reply = brain.chat(user_text)
-            speaker.speak(reply)
+                last_activity = time.time()
+
+                # Check for sleep commands
+                sleep_words = {"пока", "до свидания", "всё", "свободен",
+                               "bye", "goodbye", "спать", "иди спать", "отдыхай",
+                               "закончили", "хватит"}
+                if user_text.strip().lower() in sleep_words:
+                    speaker.speak("Хорошо. Позовите, если понадоблюсь.")
+                    print("💤 Going to sleep on request.\n")
+                    should_sleep = True
+                    break
+
+                print(f"You: {user_text}")
+                result = brain.chat(user_text)
+                speaker.speak(result.text)
+
+                if result.action == "end":
+                    print("💤 LLM ended the conversation.\n")
+                    should_sleep = True
+
+                print()
 
         except KeyboardInterrupt:
             print("\nShutting down...")
