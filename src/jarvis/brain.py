@@ -1,10 +1,18 @@
 import os
 from typing import List
-from openai import OpenAI
+from openai import OpenAI, APIError, APITimeoutError, APIConnectionError
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
 load_dotenv()
+
+SYSTEM_PROMPT = (
+    "You are Jarvis, a voice AI assistant. "
+    "Respond concisely and naturally, as if speaking aloud. "
+    "IMPORTANT: Do NOT use emojis, markdown formatting, code blocks, "
+    "or any other visual markup that cannot be spoken. "
+    "Use plain text only. Keep responses brief and conversational."
+)
 
 class Message(BaseModel):
     role: str
@@ -12,53 +20,52 @@ class Message(BaseModel):
 
 class JarvisBrain:
     def __init__(self, model: str = None):
-        # Unified LLM Configuration
         provider = os.getenv("LLM_PROVIDER", "openai").lower()
         base_url = os.getenv("LLM_BASE_URL")
         api_key = os.getenv("LLM_API_KEY")
         model_name = model or os.getenv("LLM_MODEL") or "gpt-4o"
 
-        if provider == "lmstudio":
-            # LM Studio / Local provider
-            self.client = OpenAI(
-                base_url=base_url,
-                api_key=api_key or "lm-studio"
-            )
-            self.model = model_name
-        else:
-            # Default to OpenAI
-            # If LLM_BASE_URL is provided even for openai, use it (e.g. for proxy)
-            self.client = OpenAI(
-                base_url=base_url,
-                api_key=os.getenv("OPENAI_API_KEY") or api_key
-            )
-            self.model = model_name
+        client_kwargs = {
+            "base_url": base_url,
+            "timeout": 30.0,
+            "max_retries": 1,
+        }
 
-        self.history: List[Message] = []
+        if provider == "lmstudio":
+            client_kwargs["api_key"] = api_key or "lm-studio"
+        else:
+            client_kwargs["api_key"] = os.getenv("OPENAI_API_KEY") or api_key
+
+        self.client = OpenAI(**client_kwargs)
+        self.model = model_name
+        self.history: List[Message] = [
+            Message(role="system", content=SYSTEM_PROMPT)
+        ]
 
     def chat(self, user_input: str) -> str:
-        # Add user message to history
         self.history.append(Message(role="user", content=user_input))
-        
-        # Prepare messages for the API
         messages = [msg.model_dump() for msg in self.history]
-        
+
         try:
+            print(f"🧠 Thinking...")
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 temperature=0.7,
                 max_tokens=1024
             )
-            
             reply = response.choices[0].message.content
-            
-            # Add assistant response to history
             self.history.append(Message(role="assistant", content=reply))
             return reply
-        
+
+        except APIConnectionError:
+            return "Could not connect to the LLM server. Is LM Studio running and the server started?"
+        except APITimeoutError:
+            return "LLM request timed out. The model may still be loading."
+        except APIError as e:
+            return f"LLM Error: {e}"
         except Exception as e:
-            return f"Error communicating with the brain: {str(e)}"
+            return f"Unexpected error: {str(e)}"
 
 if __name__ == "__main__":
     brain = JarvisBrain()

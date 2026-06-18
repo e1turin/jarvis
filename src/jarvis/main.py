@@ -13,7 +13,8 @@ def main():
     listener = Listener()
     speaker = Speaker()
     
-    print("System ready. Say something!")
+    print(f"System ready. Provider: {os.getenv('LLM_PROVIDER')} | Model: {brain.model}")
+    print("Say something!")
     
     while True:
         try:
