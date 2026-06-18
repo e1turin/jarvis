@@ -8,3 +8,22 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Vosk model (download separately)
+vosk-model-small-ru-0.22/
+vosk-model-*
+
+# Recordings from tools/record_wake.py
+recordings/
+
+# Temporary audio files generated at runtime
+temp_audio.wav
+temp_response.mp3
+temp_response.ogg
+
+# Environment files (private)
+.env
+
+# OS files
+.DS_Store
+Thumbs.db

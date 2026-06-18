@@ -1,9 +1,12 @@
 import os
 import time
+from dotenv import load_dotenv
 from jarvis.brain import JarvisBrain
 from jarvis.listener import Listener
 from jarvis.speaker import Speaker
 from jarvis.wake import WakeWordDetector
+
+load_dotenv()
 
 
 def main():
