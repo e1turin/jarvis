@@ -74,7 +74,7 @@ class Speaker:
             import edge_tts
             file_path = "temp_response.mp3"
             asyncio.run(
-                edge_tts.Communicate(text, voice=settings.tts_voice).save(file_path)
+                edge_tts.Communicate(text, voice=settings.tts_voice, rate=settings.tts_rate).save(file_path)
             )
             return file_path
         except Exception as e:

@@ -39,8 +39,8 @@ class JarvisBrain:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                temperature=0.7,
-                max_tokens=1024,
+                temperature=settings.llm_temperature,
+                max_tokens=settings.llm_max_tokens,
             )
             reply = response.choices[0].message.content
 

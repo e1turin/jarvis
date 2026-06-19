@@ -18,6 +18,8 @@ class Settings:
     llm_base_url: str = "localhost:1234/v1"
     llm_api_key: str = ""
     llm_model: str = "google/gemma-4-12b-qat"
+    llm_temperature: float = 0.7
+    llm_max_tokens: int = 1024
 
     # --- STT ---
     stt_model: str = "base"
@@ -30,6 +32,7 @@ class Settings:
     # --- TTS (Edge) ---
     tts_backend: str = "edge"
     tts_voice: str = "ru-RU-SvetlanaNeural"
+    tts_rate: str = "+0%"
 
     # --- TTS (Yandex) ---
     yc_api_key: str = ""
@@ -73,6 +76,8 @@ class Settings:
             llm_base_url=os.getenv("LLM_BASE_URL", ""),
             llm_api_key=os.getenv("LLM_API_KEY", ""),
             llm_model=os.getenv("LLM_MODEL", "undefined"),
+            llm_temperature=float(os.getenv("LLM_TEMPERATURE", "0.7")),
+            llm_max_tokens=int(os.getenv("LLM_MAX_TOKENS", "1024")),
 
             stt_model=os.getenv("STT_MODEL", "base"),
             vad_mode=_bool("VAD_MODE", "true"),
@@ -80,6 +85,7 @@ class Settings:
             vad_threshold=float(os.getenv("VAD_THRESHOLD", "0.02")),
             tts_backend=os.getenv("TTS_BACKEND", "edge").lower(),
             tts_voice=os.getenv("TTS_VOICE", "ru-RU-SvetlanaNeural"),
+            tts_rate=os.getenv("TTS_RATE", "+0%"),
             yc_api_key=os.getenv("YC_API_KEY", ""),
             yc_folder_id=os.getenv("YC_FOLDER_ID", ""),
             tts_lang=os.getenv("TTS_LANG", "ru-RU"),
