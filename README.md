@@ -210,6 +210,8 @@ The LLM will naturally end the conversation with `[END]` when it determines the 
 All settings live in `.env`. See `.env.example` for all options.
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `AGENT_NAME` | `Jarvis` | Agent name used in console messages (`--- Jarvis ---`, `Jarvis: text`) |
+| `WAKE_WORD_DISPLAY` | `Джарвис` | Wake word display in user messages (`Say 'Джарвис' ...`). Falls back to first wake word (capitalized) |
 | `LLM_PROVIDER` | `lmstudio` | `lmstudio` or `openai` |
 | `LLM_BASE_URL` | `http://localhost:1234/v1` | API base URL |
 | `LLM_API_KEY` | — | API key |
