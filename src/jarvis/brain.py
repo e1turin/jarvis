@@ -19,8 +19,8 @@ class JarvisBrain:
         self.client = OpenAI(
             base_url=settings.llm_base_url or None,
             api_key=settings.llm_api_key,
-            timeout=30.0,
-            max_retries=1,
+            timeout=settings.llm_timeout,
+            max_retries=settings.llm_max_retries,
         )
         self.model = model or settings.llm_model
 

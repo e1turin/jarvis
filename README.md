@@ -148,50 +148,30 @@ docker exec jarvis-ollama ollama pull gemma3:12b
 uv run jarvis
 ```
 
-## Docker Compose Setup
+## LLM Server Setup
 
-Two deployment modes are available depending on your OS.
+Jarvis needs an OpenAI-compatible LLM server running.
 
-### Option A: macOS — LLM in Docker, app on host (recommended)
+**Option A — LM Studio (recommended for macOS):**
+1. Open LM Studio, load your model (e.g. `google/gemma-4-12b-qat`)
+2. Go to **Local Server** tab → click **Start Server** (default port: 1234)
+3. Verify: `curl http://localhost:1234/v1/models`
 
-Docker on macOS **cannot** access the host microphone. The app runs on the host
-and connects to Ollama (LLM server) running in Docker.
-
+**Option B — Ollama:**
 ```bash
-# 1. Start the LLM server (Ollama) in Docker:
-docker compose -f docker-compose.yml -f docker-compose.macos.yml up -d ollama
+# Install Ollama: https://ollama.com
+docker run -d --name jarvis-ollama -p 11434:11434 -v ollama_data:/root/.ollama ollama/ollama
+# or: brew install ollama && ollama serve
 
-# 2. Pull a model:
-docker compose exec ollama ollama pull gemma3:12b
+# Pull a model:
+docker exec jarvis-ollama ollama pull gemma3:12b
+# or: ollama pull gemma3:12b
 
-# 3. Update .env:
+# Update .env:
 #    LLM_BASE_URL=http://localhost:11434/v1
 #    LLM_API_KEY=ollama
 #    LLM_MODEL=gemma3:12b
-
-# 4. Run Jarvis on the host (audio works natively):
-uv run jarvis
 ```
-
-### Option B: Linux — all-in-Docker (with audio passthrough)
-
-Linux supports passing host audio devices into the container.
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.linux.yml up --build
-
-# Pull a model (first time):
-docker compose exec ollama ollama pull gemma3:12b
-```
-
-### Docker files
-
-| File | Purpose |
-|------|---------|
-| `docker-compose.yml` | Base config — `ollama` + `jarvis` services |
-| `docker-compose.linux.yml` | Linux override — `/dev/snd` + PulseAudio passthrough |
-| `docker-compose.macos.yml` | macOS override — runs only Ollama in Docker |
-| `Dockerfile` | Container image for Jarvis |
 
 ## Usage
 
@@ -212,22 +192,30 @@ All settings live in `.env`. See `.env.example` for all options.
 |----------|---------|-------------|
 | `AGENT_NAME` | `Jarvis` | Agent name used in console messages (`--- Jarvis ---`, `Jarvis: text`) |
 | `WAKE_WORD_DISPLAY` | `Джарвис` | Wake word display in user messages (`Say 'Джарвис' ...`). Falls back to first wake word (capitalized) |
-| `LLM_PROVIDER` | `lmstudio` | `lmstudio` or `openai` |
+| `WAKE_MODE` | `true` | Enable wake word detection |
+| `WAKE_WORDS` | `джарвис` | Comma-separated wake words (lowercase) |
+| `VOSK_MODEL_PATH` | `vosk-model-small-ru-0.22` | Path to Vosk model directory |
+| `PRE_WAKE_BUFFER_SECONDS` | `3.0` | Seconds of audio kept before wake word (rolling buffer) |
 | `LLM_BASE_URL` | `http://localhost:1234/v1` | API base URL |
 | `LLM_API_KEY` | — | API key |
 | `LLM_MODEL` | `google/gemma-4-12b-qat` | Model name |
 | `LLM_TEMPERATURE` | `0.7` | Response creativity (0.0–1.0) |
 | `LLM_MAX_TOKENS` | `1024` | Max response length |
+| `LLM_TIMEOUT` | `30` | HTTP client timeout (s) |
+| `LLM_MAX_RETRIES` | `1` | Max API retries on failure |
+| `AUDIO_SAMPLE_RATE` | `16000` | Sample rate for mic capture (Hz) |
 | `STT_MODEL` | `base` | faster-whisper model size: `tiny`, `base`, `small`, `medium`, `large-v3` |
 | `VAD_MODE` | `true` | Enable voice activity detection |
 | `VAD_SILENCE_TIMEOUT` | `1.5` | Silence duration (s) before recording stops |
 | `VAD_THRESHOLD` | `0.02` | Energy threshold (lower = more sensitive) |
+| `VAD_BLOCK_SIZE_MS` | `50` | VAD analysis window (ms) |
+| `LISTENER_MAX_WAIT` | `10` | Max seconds to wait for speech before VAD gives up |
 | `TTS_BACKEND` | `edge` | `edge`, `say`, `espeak`, `yandex`, or `print` |
 | `TTS_VOICE` | `ru-RU-SvetlanaNeural` | Voice name for TTS |
 | `TTS_RATE` | `+0%` | Speech rate: `+0%` normal, `+20%` faster, `-20%` slower |
-| `WAKE_MODE` | `true` | Enable wake word detection |
-| `WAKE_WORDS` | `джарвис` | Comma-separated wake words (lowercase) |
-| `VOSK_MODEL_PATH` | `vosk-model-small-ru-0.22` | Path to Vosk model directory |
+| `TTS_GEN_TIMEOUT` | `60` | TTS generation timeout (s) |
+| `CONVERSATION_TIMEOUT` | `30` | Inactivity timeout (s) before sleep |
+| `SLEEP_WORDS` | `пока,...` | Comma-separated words to end conversation |
 | `TICK_VIBRO` | `false` | Use system beep for tick (may trigger haptic on Force Touch Macs) |
 | `LISTEN_BEEP_FREQ` | `200` | Listening beep frequency (Hz) |
 | `LISTEN_BEEP_DURATION` | `0.2` | Listening beep duration (s) |
@@ -236,8 +224,8 @@ All settings live in `.env`. See `.env.example` for all options.
 | `TICK_DURATION` | `0.03` | Thinking tick duration (s) |
 | `TICK_VOLUME` | `0.15` | Thinking tick volume (0.0–1.0) |
 | `TICK_INTERVAL` | `2.0` | Interval between thinking ticks (s) |
+| `SOUNDS_SAMPLE_RATE` | `22050` | Sample rate for beep/tick generation |
 | `SYSTEM_PROMPT_PATH` | `src/jarvis/prompt.txt` | Path to system prompt text file |
-| `CONVERSATION_TIMEOUT` | `30` | Inactivity timeout (s) before sleep |
 
 ### TTS Voices
 
@@ -274,15 +262,10 @@ This records a 3-second sample, saves it to `recordings/`, and tests if Vosk det
 
 ```
 jarvis/
-├── .dockerignore             # Docker build exclusions
-├── .env.example               # Configuration template
+├── .env.example               # Configuration template (copy to .env)
 ├── .gitignore
 ├── .python-version            # Python version for uv
-├── Dockerfile                 # Container image for Jarvis app
 ├── README.md
-├── docker-compose.yml         # Base Compose: ollama + jarvis services
-├── docker-compose.linux.yml   # Linux audio passthrough override
-├── docker-compose.macos.yml   # macOS: LLM in Docker, app on host
 ├── pyproject.toml             # Dependencies & build config
 ├── vosk-model-small-ru-0.22/  # Vosk model (downloaded separately)
 ├── tools/

@@ -10,14 +10,15 @@ from jarvis.config import settings
 
 class WakeWordDetector:
     def __init__(self):
-        self.sample_rate = 16000
+        self.sample_rate = settings.audio_sample_rate
         self.model = Model(settings.vosk_model_path)
         self.wake_words = settings.wake_words
         print(f"🔊 Vosk model loaded | Wake word: {settings.wake_word_display}")
 
-        # Rolling buffer for pre-wake audio (~3 seconds)
-        # blocksize=8000 at 16kHz => 0.5s per block, so maxlen=6 for 3 seconds
-        self._pre_buffer = deque(maxlen=6)
+        # Rolling buffer for pre-wake audio
+        # blocksize=0.5s at sample_rate => 0.5s per block
+        self._pre_buffer_blocks = int(settings.pre_wake_buffer_seconds / 0.5)
+        self._pre_buffer = deque(maxlen=self._pre_buffer_blocks)
         self._pre_buffer_file = "temp_pre_wake.wav"
 
     def wait_for_wake_word(self) -> bool:

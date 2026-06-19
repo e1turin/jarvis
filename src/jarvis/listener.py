@@ -6,9 +6,9 @@ from jarvis.config import settings
 
 
 class Listener:
-    def __init__(self, sample_rate: int = 16000, duration: int = 5):
-        self.sample_rate = sample_rate
-        self.duration = duration
+    def __init__(self):
+        self.sample_rate = settings.audio_sample_rate
+        self.max_wait = settings.listener_max_wait
         self.vad_mode = settings.vad_mode
         self.silence_timeout = settings.vad_silence_timeout
         self.vad_threshold = settings.vad_threshold
@@ -54,8 +54,8 @@ class Listener:
     def _record_fixed(self) -> str:
         """Record for a fixed duration."""
         filename = "temp_audio.wav"
-        print(f"🎤 Listening for {self.duration} seconds...")
-        recording = sd.rec(int(self.duration * self.sample_rate),
+        print(f"🎤 Listening for {self.max_wait} seconds...")
+        recording = sd.rec(int(self.max_wait * self.sample_rate),
                            samplerate=self.sample_rate,
                            channels=1,
                            dtype='float32')
@@ -72,16 +72,16 @@ class Listener:
         filename = "temp_audio.wav"
         print(f"🎤 Listening (VAD, silence timeout: {self.silence_timeout}s)...")
 
-        # Use a small buffer and detect energy
-        block_size = int(0.05 * self.sample_rate)  # 50ms blocks
-        threshold = self.vad_threshold  # Energy threshold for voice activity
-        block_interval = 0.05  # seconds per block
+        # Use configurable block size for energy detection
+        block_size = int(settings.vad_block_size_ms / 1000 * self.sample_rate)
+        block_interval = settings.vad_block_size_ms / 1000.0  # seconds per block
+        threshold = self.vad_threshold
 
         audio_buffer = []
         speech_detected = False
         silence_frames = 0
         silence_limit = int(self.silence_timeout / block_interval)  # blocks of silence before stopping
-        max_silent_blocks = int(self.duration / block_interval)  # total silent blocks before giving up
+        max_silent_blocks = int(self.max_wait / block_interval)  # total silent blocks before giving up
         total_blocks = 0
 
         try:

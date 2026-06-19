@@ -21,6 +21,7 @@ class Settings:
     wake_mode: bool = True
     wake_words: list[str] = field(default_factory=lambda: ["джарвис"])
     vosk_model_path: str = "vosk-model-small-ru-0.22"
+    pre_wake_buffer_seconds: float = 3.0
 
     # ── LLM (OpenAI-compatible API) ───────────────────────
     llm_provider: str = "lmstudio"
@@ -29,6 +30,11 @@ class Settings:
     llm_model: str = "google/gemma-4-12b-qat"
     llm_temperature: float = 0.7
     llm_max_tokens: int = 1024
+    llm_timeout: int = 30
+    llm_max_retries: int = 1
+
+    # ── Audio / Microphone ────────────────────────────────
+    audio_sample_rate: int = 16000
 
     # ── Speech-to-Text (faster-whisper) ───────────────────
     stt_model: str = "base"
@@ -37,14 +43,18 @@ class Settings:
     vad_mode: bool = True
     vad_silence_timeout: float = 1.5
     vad_threshold: float = 0.02
+    vad_block_size_ms: int = 50
+    listener_max_wait: int = 10
 
     # ── Text-to-Speech ────────────────────────────────────
     tts_backend: str = "edge"
     tts_voice: str = "ru-RU-SvetlanaNeural"
     tts_rate: str = "+0%"
+    tts_gen_timeout: int = 60
 
     # ── Conversation ──────────────────────────────────────
     conversation_timeout: int = 30
+    sleep_words: str = "пока,до свидания,всё,свободен,bye,goodbye,спать,иди спать,отдыхай,закончили,хватит"
 
     # ── Sound feedback (beep / ticks) ─────────────────────
     tick_vibro: bool = False
@@ -55,6 +65,7 @@ class Settings:
     tick_duration: float = 0.03
     tick_volume: float = 0.15
     tick_interval: float = 2.0
+    sounds_sample_rate: int = 22050
 
     # ── System prompt ─────────────────────────────────────
     system_prompt_path: str = ""
@@ -85,6 +96,7 @@ class Settings:
             wake_mode=_bool("WAKE_MODE", "true"),
             wake_words=wake_words,
             vosk_model_path=os.getenv("VOSK_MODEL_PATH", "vosk-model-small-ru-0.22"),
+            pre_wake_buffer_seconds=float(os.getenv("PRE_WAKE_BUFFER_SECONDS", "3.0")),
 
             # ── LLM ──
             llm_provider=os.getenv("LLM_PROVIDER", "undefined"),
@@ -93,6 +105,11 @@ class Settings:
             llm_model=os.getenv("LLM_MODEL", "undefined"),
             llm_temperature=float(os.getenv("LLM_TEMPERATURE", "0.7")),
             llm_max_tokens=int(os.getenv("LLM_MAX_TOKENS", "1024")),
+            llm_timeout=int(os.getenv("LLM_TIMEOUT", "30")),
+            llm_max_retries=int(os.getenv("LLM_MAX_RETRIES", "1")),
+
+            # ── Audio / Microphone ──
+            audio_sample_rate=int(os.getenv("AUDIO_SAMPLE_RATE", "16000")),
 
             # ── STT ──
             stt_model=os.getenv("STT_MODEL", "base"),
@@ -101,14 +118,19 @@ class Settings:
             vad_mode=_bool("VAD_MODE", "true"),
             vad_silence_timeout=float(os.getenv("VAD_SILENCE_TIMEOUT", "1.5")),
             vad_threshold=float(os.getenv("VAD_THRESHOLD", "0.02")),
+            vad_block_size_ms=int(os.getenv("VAD_BLOCK_SIZE_MS", "50")),
+            listener_max_wait=int(os.getenv("LISTENER_MAX_WAIT", "10")),
 
             # ── TTS ──
             tts_backend=os.getenv("TTS_BACKEND", "edge").lower(),
             tts_voice=os.getenv("TTS_VOICE", "ru-RU-SvetlanaNeural"),
             tts_rate=os.getenv("TTS_RATE", "+0%"),
+            tts_gen_timeout=int(os.getenv("TTS_GEN_TIMEOUT", "60")),
 
             # ── Conversation ──
             conversation_timeout=int(os.getenv("CONVERSATION_TIMEOUT", "30")),
+            sleep_words=os.getenv("SLEEP_WORDS",
+                "пока,до свидания,всё,свободен,bye,goodbye,спать,иди спать,отдыхай,закончили,хватит"),
 
             # ── Sound feedback ──
             tick_vibro=_bool("TICK_VIBRO"),
@@ -119,6 +141,7 @@ class Settings:
             tick_duration=float(os.getenv("TICK_DURATION", "0.03")),
             tick_volume=float(os.getenv("TICK_VOLUME", "0.15")),
             tick_interval=float(os.getenv("TICK_INTERVAL", "2.0")),
+            sounds_sample_rate=int(os.getenv("SOUNDS_SAMPLE_RATE", "22050")),
 
             # ── System prompt ──
             system_prompt_path=os.getenv("SYSTEM_PROMPT_PATH", default_prompt),

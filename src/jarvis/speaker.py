@@ -137,7 +137,7 @@ class Speaker:
             self._gen_process = subprocess.Popen(
                 cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
             )
-            self._gen_process.wait(timeout=60)
+            self._gen_process.wait(timeout=settings.tts_gen_timeout)
             if os.path.exists(file_path):
                 return file_path
             return ""
@@ -165,7 +165,7 @@ class Speaker:
                 ["espeak-ng", "-v", voice, "-w", file_path, "--", text],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
-            self._gen_process.wait(timeout=60)
+            self._gen_process.wait(timeout=settings.tts_gen_timeout)
             if os.path.exists(file_path):
                 return file_path
             return ""

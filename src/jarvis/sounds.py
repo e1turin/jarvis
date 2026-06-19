@@ -12,19 +12,20 @@ import numpy as np
 from scipy.io import wavfile
 from jarvis.config import settings
 
-SAMPLE_RATE = 22050
 
 
 def _generate_beep(freq: float, duration: float, volume: float) -> np.ndarray:
     """Generate a sine wave tone with fade in/out."""
-    n = int(SAMPLE_RATE * duration)
+    sr = settings.sounds_sample_rate
+    n = int(sr * duration)
     t = np.linspace(0, duration, n, endpoint=False)
     tone = volume * np.sin(2 * np.pi * freq * t)
-    fade = int(SAMPLE_RATE * min(duration * 0.1, 0.01))  # 10% or 10ms
+    fade = int(sr * min(duration * 0.1, 0.01))  # 10% or 10ms
     if fade > 0:
         tone[:fade] *= np.linspace(0, 1, fade)
         tone[-fade:] *= np.linspace(1, 0, fade)
     return tone
+
 
 
 def _play_blocking(file_path: str):
@@ -56,7 +57,7 @@ def _play_async(file_path: str):
 def _write_beep(file_path: str, freq: float, duration: float, volume: float):
     """Generate and write a beep WAV file."""
     tone = _generate_beep(freq, duration, volume)
-    wavfile.write(file_path, SAMPLE_RATE, (tone * 32767).astype(np.int16))
+    wavfile.write(file_path, settings.sounds_sample_rate, (tone * 32767).astype(np.int16))
 
 
 def _tick_feedback():

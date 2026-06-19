@@ -61,10 +61,8 @@ def main():
 
                 last_activity = time.time()
 
-                # Check for sleep commands
-                sleep_words = {"пока", "до свидания", "всё", "свободен",
-                               "bye", "goodbye", "спать", "иди спать", "отдыхай",
-                               "закончили", "хватит"}
+                # Check for sleep commands (from config)
+                sleep_words = {w.strip().lower() for w in settings.sleep_words.split(",")}
                 if user_text.strip().lower() in sleep_words:
                     speaker.speak("Хорошо. Позовите, если понадоблюсь.")
                     print("💤 Going to sleep on request.\n")
