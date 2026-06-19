@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[oc]
+build/
+dist/
+*.egg-info
+
+# Virtual environment
+.venv
+
+# Environment files (private)
+.env
+
+# Vosk model (mounted as volume instead)
+vosk-model-small-ru-0.22/
+vosk-model-small-ru-0.22.zip
+vosk-model-*
+
+# Git
+.git/
+.gitignore
+
+# Temp audio files
+temp_*.wav
+temp_*.mp3
+temp_*.ogg
+recordings/
+
+# macOS
+.DS_Store
+
+# Docker files (not needed in image)
+Dockerfile
+docker-compose*.yml
+.dockerignore
+README.md

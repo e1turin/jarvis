@@ -149,6 +149,64 @@ uv run jarvis
 
 The LLM will naturally end the conversation with `[END]` when it determines the discussion is finished.
 
+## Docker Compose Setup
+
+Two deployment modes are available depending on your OS.
+
+### Option A: macOS — LLM in Docker, app on host (recommended)
+
+Docker on macOS **cannot** access the host microphone. The app runs on the host
+and connects to Ollama (LLM server) running in Docker.
+
+```bash
+# 1. Start only the LLM server (Ollama) in Docker:
+docker compose -f docker-compose.yml -f docker-compose.macos.yml up -d ollama
+
+# 2. Pull a model in Ollama:
+docker compose exec ollama ollama pull gemma3:12b
+
+# 3. Update your .env to point to Ollama:
+#    LLM_BASE_URL=http://localhost:11434/v1
+#    LLM_API_KEY=ollama
+#    LLM_MODEL=gemma3:12b
+
+# 4. Run Jarvis on the host (audio works natively):
+uv run jarvis
+```
+
+### Option B: Linux — all-in-Docker (with audio passthrough)
+
+Linux supports passing host audio devices (mic + speakers) into the container.
+
+```bash
+# Start everything:
+docker compose -f docker-compose.yml -f docker-compose.linux.yml up --build
+
+# Pull a model in Ollama (first time):
+docker compose -f docker-compose.yml -f docker-compose.linux.yml exec ollama ollama pull gemma3:12b
+
+# Restart jarvis after pulling the model:
+docker compose -f docker-compose.yml -f docker-compose.linux.yml restart jarvis
+```
+
+### Docker Compose files
+
+| File | Purpose |
+|------|---------|
+| `docker-compose.yml` | Base config — defines `ollama` + `jarvis` services |
+| `docker-compose.linux.yml` | Linux override — passes `/dev/snd` and PulseAudio into container |
+| `docker-compose.macos.yml` | macOS override — disables jarvis service (run on host), starts only Ollama |
+| `Dockerfile` | Container image for the Jarvis app |
+
+### Notes
+
+- The **Ollama** container runs on Apple Silicon (Metal acceleration) and x86_64 (CPU/GPU).
+- The Vosk model is mounted as a read-only volume — no need to bake it into the image.
+- Whisper models (`faster-whisper`) download on first use and cache inside the container.
+- Set `OLLAMA_KEEP_ALIVE=5m` in environment to keep the model loaded between requests.
+- On Linux, if you don't use PulseAudio, set `AUDIODEV=hw:0,0` in the linux override.
+- The `.env` file and `prompt.txt` are mounted live — edit them without rebuilding.
+
 ## Configuration Reference
 
 All settings live in `.env`. See `.env.example` for all options.
@@ -198,25 +256,30 @@ This records a 3-second sample, saves it to `recordings/`, and tests if Vosk det
 
 ```
 jarvis/
-├── .env.example            # Configuration template
+├── .dockerignore            # Docker build exclusions
+├── .env.example             # Configuration template
 ├── .gitignore
-├── .python-version         # Python version for uv
+├── .python-version          # Python version for uv
+├── Dockerfile               # Container image for Jarvis app
 ├── README.md
-├── pyproject.toml          # Dependencies & build config
-├── vosk-model-small-ru-0.22/     # Vosk model (downloaded separately)
+├── docker-compose.yml       # Base Compose: ollama + jarvis services
+├── docker-compose.linux.yml # Linux audio passthrough override
+├── docker-compose.macos.yml # macOS: LLM in Docker, app on host
+├── pyproject.toml           # Dependencies & build config
+├── vosk-model-small-ru-0.22/      # Vosk model (downloaded separately)
 ├── tools/
-│   └── record_wake.py      # Wake word testing utility
+│   └── record_wake.py       # Wake word testing utility
 └── src/
     └── jarvis/
         ├── __init__.py
-        ├── config.py        # Centralized config (typed, from .env)
-        ├── main.py          # Orchestrator — wake → converse → sleep
-        ├── brain.py         # LLM client + [END] parsing
-        ├── listener.py      # VAD recording + Whisper STT
-        ├── prompt.txt       # System prompt (editable text file)
-        ├── sounds.py        # Audio feedback cues (beep, ticks)
-        ├── speaker.py       # TTS generation + async playback
-        └── wake.py          # Vosk wake word + barge-in detection
+        ├── config.py         # Centralized config (typed, from .env)
+        ├── main.py           # Orchestrator — wake → converse → sleep
+        ├── brain.py          # LLM client + [END] parsing
+        ├── listener.py       # VAD recording + Whisper STT
+        ├── prompt.txt        # System prompt (editable text file)
+        ├── sounds.py         # Audio feedback cues (beep, ticks)
+        ├── speaker.py        # TTS generation + async playback
+        └── wake.py           # Vosk wake word + barge-in detection
 ```
 
 ### Architecture

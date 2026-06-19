@@ -1,0 +1,107 @@
+version: "3.8"
+
+# ──────────────────────────────────────────────────────────
+# Jarvis Voice AI Assistant — Docker Compose
+# ──────────────────────────────────────────────────────────
+# This setup provides:
+#   1. ollama  — LLM inference server (replaces LM Studio in Docker)
+#   2. jarvis  — The Jarvis assistant app
+#
+# ⚠️  Mic passthrough: Docker on macOS CANNOT access the host microphone
+#    natively. For full local audio (mic + speakers) you have two options:
+#
+#    A) Run jarvis on the HOST (uv run jarvis) and use ollama from Docker:
+#       Set LLM_BASE_URL=http://localhost:11434/v1 in .env
+#       (recommended for macOS)
+#
+#    B) On Linux, use the audio override:
+#       docker compose -f docker-compose.yml -f docker-compose.linux.yml up
+#       This passes /dev/snd and PulseAudio into the container.
+# ──────────────────────────────────────────────────────────
+
+services:
+  # ── LLM Inference Server ──────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: jarvis-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    # NVIDIA GPU support (Linux only): uncomment if you have an NVIDIA GPU
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           capabilities: [gpu]
+    # On Apple Silicon, Ollama uses Metal automatically via the image.
+    environment:
+      - OLLAMA_KEEP_ALIVE=5m  # Keep model loaded 5 min after last request
+      # Uncomment to set concurrency:
+      # - OLLAMA_NUM_PARALLEL=1
+
+  # ── Jarvis Assistant ─────────────────────────────────
+  jarvis:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jarvis-app
+    depends_on:
+      - ollama
+    environment:
+      # Point to the ollama service inside Docker
+      - LLM_PROVIDER=openai
+      - LLM_BASE_URL=http://ollama:11434/v1
+      - LLM_API_KEY=ollama
+      - LLM_MODEL=${LLM_MODEL:-gemma3:12b}
+      - LLM_TEMPERATURE=${LLM_TEMPERATURE:-0.7}
+      - LLM_MAX_TOKENS=${LLM_MAX_TOKENS:-1024}
+
+      # STT
+      - STT_MODEL=${STT_MODEL:-base}
+
+      # VAD
+      - VAD_MODE=${VAD_MODE:-true}
+      - VAD_SILENCE_TIMEOUT=${VAD_SILENCE_TIMEOUT:-1.5}
+      - VAD_THRESHOLD=${VAD_THRESHOLD:-0.02}
+
+      # TTS
+      - TTS_BACKEND=${TTS_BACKEND:-edge}
+      - TTS_VOICE=${TTS_VOICE:-ru-RU-SvetlanaNeural}
+      - TTS_RATE=${TTS_RATE:-+0%}
+
+      # Wake word
+      - WAKE_MODE=${WAKE_MODE:-true}
+      - WAKE_WORDS=${WAKE_WORDS:-джарвис}
+      - VOSK_MODEL_PATH=${VOSK_MODEL_PATH:-/app/vosk-model-small-ru-0.22}
+
+      # Conversation
+      - CONVERSATION_TIMEOUT=${CONVERSATION_TIMEOUT:-30}
+
+      # Audio feedback
+      - TICK_VIBRO=${TICK_VIBRO:-false}
+      - LISTEN_BEEP_FREQ=${LISTEN_BEEP_FREQ:-200}
+      - LISTEN_BEEP_DURATION=${LISTEN_BEEP_DURATION:-0.2}
+      - LISTEN_BEEP_VOLUME=${LISTEN_BEEP_VOLUME:-0.4}
+      - TICK_FREQ=${TICK_FREQ:-350}
+      - TICK_DURATION=${TICK_DURATION:-0.03}
+      - TICK_VOLUME=${TICK_VOLUME:-0.15}
+      - TICK_INTERVAL=${TICK_INTERVAL:-2.0}
+
+      # System prompt
+      - SYSTEM_PROMPT_PATH=${SYSTEM_PROMPT_PATH:-/app/src/jarvis/prompt.txt}
+    volumes:
+      # Mount the Vosk model so it doesn't need to be in the image
+      - ./vosk-model-small-ru-0.22:/app/vosk-model-small-ru-0.22:ro
+      # Mount the config for easy editing
+      - ./.env:/app/.env:ro
+      # Mount prompt.txt for easy editing
+      - ./src/jarvis/prompt.txt:/app/src/jarvis/prompt.txt:ro
+    stdin_open: true   # -i (interactive)
+    tty: true          # -t (allocate pseudo-TTY)
+    # On Linux with audio passthrough, use the linux override file
+
+volumes:
+  ollama_data:

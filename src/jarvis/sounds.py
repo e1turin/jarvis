@@ -6,6 +6,7 @@ Supports vibro/haptic feedback via system beep on supported Macs.
 
 import os
 import subprocess
+import shutil
 import threading
 import time
 import numpy as np
@@ -13,6 +14,32 @@ from scipy.io import wavfile
 from jarvis.config import settings
 
 SAMPLE_RATE = 22050
+
+# ── Audio player selection (cross-platform) ─────────────
+_PLAYER_BLOCKING = None
+_PLAYER_ASYNC = None
+
+
+def _detect_players():
+    global _PLAYER_BLOCKING, _PLAYER_ASYNC
+    if os.uname().sysname == "Darwin":
+        # macOS: afplay (comes built-in)
+        _PLAYER_BLOCKING = ["afplay"]
+        _PLAYER_ASYNC = ["afplay"]
+    elif shutil.which("ffplay"):
+        # Linux with ffplay from ffmpeg
+        _PLAYER_BLOCKING = ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet"]
+        _PLAYER_ASYNC = ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet"]
+    elif shutil.which("aplay"):
+        # Linux with ALSA aplay
+        _PLAYER_BLOCKING = ["aplay", "-q"]
+        _PLAYER_ASYNC = ["aplay", "-q"]
+    else:
+        _PLAYER_BLOCKING = None
+        _PLAYER_ASYNC = None
+
+
+_detect_players()
 
 
 def _generate_beep(freq: float, duration: float, volume: float) -> np.ndarray:
@@ -28,27 +55,29 @@ def _generate_beep(freq: float, duration: float, volume: float) -> np.ndarray:
 
 
 def _play_blocking(file_path: str):
-    """Play a WAV file with afplay and wait for completion."""
+    """Play a WAV file and wait for completion."""
+    if not os.path.exists(file_path) or _PLAYER_BLOCKING is None:
+        return
     try:
-        if os.path.exists(file_path):
-            subprocess.run(
-                ["afplay", file_path],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
+        subprocess.run(
+            [*_PLAYER_BLOCKING, file_path],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
     except Exception:
         pass
 
 
 def _play_async(file_path: str):
-    """Play a WAV file with afplay (non-blocking)."""
+    """Play a WAV file (non-blocking)."""
+    if not os.path.exists(file_path) or _PLAYER_ASYNC is None:
+        return
     try:
-        if os.path.exists(file_path):
-            subprocess.Popen(
-                ["afplay", file_path],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
+        subprocess.Popen(
+            [*_PLAYER_ASYNC, file_path],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
     except Exception:
         pass
 

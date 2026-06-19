@@ -1,0 +1,40 @@
+# ──────────────────────────────────────────────────────────
+# Linux-specific overrides for Docker Compose.
+# Passes host audio devices into the container for mic + speakers.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.linux.yml up
+# ──────────────────────────────────────────────────────────
+
+version: "3.8"
+
+services:
+  jarvis:
+    # Pass ALSA/OSS audio devices for microphone capture
+    devices:
+      - /dev/snd:/dev/snd
+      # Alternative: - /dev/dri:/dev/dri  (if using GPU for whisper)
+
+    # PulseAudio socket mapping for audio playback
+    volumes:
+      - /run/user/${UID:-1000}/pulse:/run/user/1000/pulse
+      - ~/.config/pulse:/home/user/.config/pulse:ro
+
+    environment:
+      - PULSE_SERVER=unix:/run/user/1000/pulse/native
+      # If using ALSA directly instead of PulseAudio:
+      # - AUDIODEV=hw:0,0
+
+    # Add user to audio group
+    group_add:
+      - audio
+
+    # Capabilities needed for real-time audio
+    cap_add:
+      - SYS_NICE
+      - SYS_RESOURCE
+
+    # Resource limits for audio
+    ulimits:
+      rtprio: 10
+      memlock: -1

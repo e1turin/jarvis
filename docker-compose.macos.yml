@@ -1,0 +1,28 @@
+# ──────────────────────────────────────────────────────────
+# macOS-specific overrides for Docker Compose.
+#
+# On macOS, Docker cannot access the host microphone or
+# speakers directly. This override runs ONLY the LLM server
+# (Ollama) in Docker. The Jarvis app runs on the host with
+# `uv run jarvis` and connects to Ollama via the network.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.macos.yml up -d ollama
+#   uv run jarvis   (on the host)
+#
+# Make sure your .env has:
+#   LLM_BASE_URL=http://localhost:11434/v1
+#   LLM_API_KEY=ollama
+#   LLM_MODEL=gemma3:12b   (or whatever model you pulled in Ollama)
+#
+# Pull the model first:
+#   docker compose exec ollama ollama pull gemma3:12b
+# ──────────────────────────────────────────────────────────
+
+version: "3.8"
+
+services:
+  # Only run the ollama service; jarvis service runs on host
+  jarvis:
+    profiles:
+      - never  # Don't start jarvis in this override; user runs it on host
