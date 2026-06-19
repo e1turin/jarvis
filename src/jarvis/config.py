@@ -33,6 +33,11 @@ class Settings:
     llm_timeout: int = 30
     llm_max_retries: int = 1
 
+    # ── Proxy (HTTP/HTTPS/SOCKS5) ──────────────────────────
+    http_proxy: str = ""
+    https_proxy: str = ""
+    no_proxy: str = ""
+
     # ── Audio / Microphone ────────────────────────────────
     audio_sample_rate: int = 16000
 
@@ -107,6 +112,11 @@ class Settings:
             llm_max_tokens=int(os.getenv("LLM_MAX_TOKENS", "1024")),
             llm_timeout=int(os.getenv("LLM_TIMEOUT", "30")),
             llm_max_retries=int(os.getenv("LLM_MAX_RETRIES", "1")),
+
+            # ── Proxy ──
+            http_proxy=os.getenv("HTTP_PROXY", ""),
+            https_proxy=os.getenv("HTTPS_PROXY", ""),
+            no_proxy=os.getenv("NO_PROXY", ""),
 
             # ── Audio / Microphone ──
             audio_sample_rate=int(os.getenv("AUDIO_SAMPLE_RATE", "16000")),

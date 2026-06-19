@@ -93,9 +93,17 @@ class Speaker:
         try:
             import edge_tts
             file_path = "temp_response.mp3"
-            asyncio.run(
-                edge_tts.Communicate(text, voice=settings.tts_voice, rate=settings.tts_rate).save(file_path)
-            )
+            proxy_url = settings.https_proxy or settings.http_proxy or None
+            if proxy_url:
+                communicate = edge_tts.Communicate(
+                    text, voice=settings.tts_voice, rate=settings.tts_rate,
+                    proxy=proxy_url,
+                )
+            else:
+                communicate = edge_tts.Communicate(
+                    text, voice=settings.tts_voice, rate=settings.tts_rate
+                )
+            asyncio.run(communicate.save(file_path))
             return file_path
         except Exception as e:
             print(f"  TTS generation error: {e}")
@@ -204,6 +212,7 @@ class Speaker:
             }
 
             file_path = "temp_response.ogg"
+            # Proxy is auto-detected from HTTP_PROXY / HTTPS_PROXY / NO_PROXY env vars
             with httpx.Client() as client:
                 response = client.post(url, headers=headers, data=data)
                 response.raise_for_status()

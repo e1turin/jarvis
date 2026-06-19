@@ -16,6 +16,10 @@ class ChatResult(BaseModel):
 
 class JarvisBrain:
     def __init__(self, model: str = None):
+        # Proxy is auto-detected from HTTP_PROXY / HTTPS_PROXY / NO_PROXY
+        # environment variables (loaded from .env by python-dotenv).
+        # httpx (used by OpenAI) reads these automatically and respects NO_PROXY,
+        # so localhost traffic (LM Studio / Ollama) bypasses the proxy.
         self.client = OpenAI(
             base_url=settings.llm_base_url or None,
             api_key=settings.llm_api_key,

@@ -203,6 +203,9 @@ All settings live in `.env`. See `.env.example` for all options.
 | `LLM_MAX_TOKENS` | `1024` | Max response length |
 | `LLM_TIMEOUT` | `30` | HTTP client timeout (s) |
 | `LLM_MAX_RETRIES` | `1` | Max API retries on failure |
+| `HTTP_PROXY` | — | HTTP proxy URL (`http://host:port`) |
+| `HTTPS_PROXY` | — | HTTPS proxy URL. Also used for SOCKS5 (`socks5://host:1080`) |
+| `NO_PROXY` | — | Comma-separated hosts to bypass proxy |
 | `AUDIO_SAMPLE_RATE` | `16000` | Sample rate for mic capture (Hz) |
 | `STT_MODEL` | `base` | faster-whisper model size: `tiny`, `base`, `small`, `medium`, `large-v3` |
 | `VAD_MODE` | `true` | Enable voice activity detection |
