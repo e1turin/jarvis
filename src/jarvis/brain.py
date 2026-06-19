@@ -29,9 +29,15 @@ class JarvisBrain:
             Message(role="system", content=system_prompt)
         ]
 
-    def chat(self, user_input: str) -> ChatResult:
-        self.history.append(Message(role="user", content=user_input))
+    def send_message(self, user_input: str) -> ChatResult:
+        """
+        Send user input to the LLM and get a response.
+        Does NOT modify self.history — caller must call commit_turn() on success.
+        This allows the caller to discard the turn if interrupted.
+        """
+        # Build messages from history + new input, without modifying history
         messages = [msg.model_dump() for msg in self.history]
+        messages.append({"role": "user", "content": user_input})
 
         try:
             print(f"🧠 Thinking...")
@@ -48,10 +54,8 @@ class JarvisBrain:
             end_marker = "[END]"
             if reply.rstrip().endswith(end_marker):
                 text = reply.rstrip()[:-len(end_marker)].strip()
-                self.history.append(Message(role="assistant", content=text))
                 return ChatResult(text=text, action="end")
 
-            self.history.append(Message(role="assistant", content=reply))
             return ChatResult(text=reply, action="continue")
 
         except APIConnectionError:
@@ -68,6 +72,23 @@ class JarvisBrain:
             return ChatResult(text=f"LLM Error: {e}", action="end")
         except Exception as e:
             return ChatResult(text=f"Unexpected error: {str(e)}", action="end")
+
+    def commit_turn(self, user_input: str, result: ChatResult):
+        """
+        Commit a completed turn to conversation history.
+        Call this only after send_message() succeeds and was not interrupted.
+        """
+        self.history.append(Message(role="user", content=user_input))
+        self.history.append(Message(role="assistant", content=result.text))
+
+    def chat(self, user_input: str) -> ChatResult:
+        """
+        Original chat method — sends message AND commits to history.
+        Kept for backward compatibility (used by standalone test).
+        """
+        result = self.send_message(user_input)
+        self.commit_turn(user_input, result)
+        return result
 
 
 if __name__ == "__main__":

@@ -70,8 +70,38 @@ def main():
 
                 print(f"You: {user_text}")
                 play_thinking_ticks()
-                result = brain.chat(user_text)
+
+                # ── Think with barge-in ───────────────────────────────────────
+                # Run LLM in background thread so mic can be monitored during thinking.
+                thinking_done = threading.Event()
+                thinking_result = [None]
+
+                def _think():
+                    r = brain.send_message(user_text)
+                    thinking_result[0] = r
+                    thinking_done.set()
+
+                think_thread = threading.Thread(target=_think, daemon=True)
+                think_thread.start()
+
+                interrupted = False
+                if barge_detector:
+                    interrupted = barge_detector.wait_for_barge_in(
+                        lambda: think_thread.is_alive()
+                    )
+
+                if interrupted:
+                    stop_thinking_ticks()
+                    print("⏹️ Interrupted!\n")
+                    continue
+
+                # Thinking completed normally
+                thinking_done.wait()
                 stop_thinking_ticks()
+                result = thinking_result[0]
+
+                # Commit to history now that we know the turn wasn't interrupted
+                brain.commit_turn(user_text, result)
 
                 if result.action == "end":
                     speaker.speak(result.text)
@@ -94,8 +124,6 @@ def main():
 
                 if barge_detector and not response_mentions_wake:
                     # ── Non-blocking: generate TTS in background thread ────────────
-                    # Monitor mic from the start of generation through end of playback,
-                    # so user can interrupt at any time (even during slow TTS generation).
                     gen_done = threading.Event()
 
                     def _gen_and_play():
@@ -104,19 +132,18 @@ def main():
                             speaker.play_async(fp)
                         gen_done.set()
 
-                    thread = threading.Thread(target=_gen_and_play, daemon=True)
-                    thread.start()
+                    gen_thread = threading.Thread(target=_gen_and_play, daemon=True)
+                    gen_thread.start()
 
                     # Monitor for wake word during generation AND playback
                     interrupted = barge_detector.wait_for_barge_in(
-                        lambda: thread.is_alive() or speaker.is_playing()
+                        lambda: gen_thread.is_alive() or speaker.is_playing()
                     )
 
                     if interrupted:
                         speaker.stop_playback()
                         print("⏹️ Interrupted!\n")
                     else:
-                        # Ensure playback finished
                         gen_done.wait(timeout=10)
                         if speaker.playback_process:
                             speaker.playback_process.wait()
