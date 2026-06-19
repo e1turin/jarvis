@@ -12,10 +12,15 @@ class Speaker:
 
     def generate_speech(self, text: str) -> str:
         """Generate TTS audio file and return the path. Blocks until done."""
-        if settings.tts_backend == "edge":
+        backend = settings.tts_backend
+        if backend == "edge":
             return self._generate_edge(text)
-        elif settings.tts_backend == "yandex":
+        elif backend == "yandex":
             return self._generate_yandex(text)
+        elif backend == "say":
+            return self._generate_say(text)
+        elif backend == "espeak":
+            return self._generate_espeak(text)
         else:
             # Fallback: print only
             return ""
@@ -79,6 +84,76 @@ class Speaker:
             return file_path
         except Exception as e:
             print(f"  TTS generation error: {e}")
+            return ""
+
+    @staticmethod
+    def _parse_say_rate(rate_str: str) -> int | None:
+        """
+        Convert edge-tts percentage rate (+0%, +20%, -30%) to
+        words-per-minute for the `say` command (default ~200 wpm).
+        Returns None to use say's default.
+        """
+        if not rate_str:
+            return None
+        rate_str = rate_str.strip()
+        if rate_str.endswith("%"):
+            try:
+                percent = float(rate_str[:-1])
+                base_rate = 200
+                return max(50, int(round(base_rate * (1 + percent / 100))))
+            except ValueError:
+                return None
+        return None
+
+    def _generate_say(self, text: str) -> str:
+        """
+        Generate speech using macOS built-in `say` command.
+        Fully offline. Voice must be installed in the system.
+        """
+        voice = settings.tts_voice or "Milena"
+        rate = self._parse_say_rate(settings.tts_rate)
+        file_path = "temp_response.aiff"
+        try:
+            cmd = ["say", "-o", file_path, "-v", voice]
+            if rate is not None:
+                cmd += ["-r", str(rate)]
+            cmd += [text]
+            subprocess.run(cmd, check=True, capture_output=True, timeout=60)
+            if os.path.exists(file_path):
+                return file_path
+            return ""
+        except subprocess.TimeoutExpired:
+            print("  TTS generation timed out")
+            return ""
+        except Exception as e:
+            print(f"  TTS generation error (say): {e}")
+            print("  Tip: Install Russian voices in System Settings → Accessibility → Spoken Content")
+            return ""
+
+    def _generate_espeak(self, text: str) -> str:
+        """
+        Generate speech using espeak-ng (cross-platform, fully offline).
+        Install: brew install espeak-ng  (macOS)
+                 apt install espeak-ng   (Debian/Ubuntu)
+        """
+        if not shutil.which("espeak-ng"):
+            print("  espeak-ng not found. Install it or use a different TTS backend.")
+            return ""
+        voice = settings.tts_voice or "ru"
+        file_path = "temp_response.wav"
+        try:
+            subprocess.run(
+                ["espeak-ng", "-v", voice, "-w", file_path, "--", text],
+                check=True, capture_output=True, timeout=60,
+            )
+            if os.path.exists(file_path):
+                return file_path
+            return ""
+        except subprocess.TimeoutExpired:
+            print("  TTS generation timed out")
+            return ""
+        except Exception as e:
+            print(f"  TTS generation error (espeak-ng): {e}")
             return ""
 
     def _generate_yandex(self, text: str) -> str:

@@ -83,37 +83,50 @@ Copy the template and edit:
 cp .env.example .env
 ```
 
-Then edit `.env` with your settings:
+Then edit `.env` with your settings. See **Quick Start** below for typical configs.
+
+### 4. Choose your TTS backend
+
+Jarvis supports several TTS backends. For **fully offline operation**, use macOS `say`:
+
+| Backend | Online | Quality | Platform |
+|---------|--------|---------|----------|
+| `say`   | ❌ Offline | ★★★ Good | macOS only (built-in) |
+| `edge`  | ⚠️ Internet | ★★★★ Best | Cross-platform |
+| `espeak`| ❌ Offline | ★★ Robotic | Cross-platform (install espeak-ng) |
+| `yandex`| ⚠️ Internet | ★★★★ Best | Requires Yandex Cloud API key |
+| `print` | ❌ Offline | — | No audio, debug only |
+
+**Fully offline config (macOS):**
 
 ```env
-# --- LLM (LM Studio) ---
-LLM_PROVIDER=lmstudio
-LLM_BASE_URL=http://localhost:1234/v1
-LLM_API_KEY=lm-studio
-LLM_MODEL=google/gemma-4-12b-qat
-
-# --- STT ---
-STT_MODEL=base
-
-# --- VAD ---
-VAD_MODE=true
-VAD_SILENCE_TIMEOUT=1.5
-VAD_THRESHOLD=0.02
-
-# --- TTS ---
-TTS_BACKEND=edge
-TTS_VOICE=ru-RU-SvetlanaNeural
-
-# --- Wake word ---
-WAKE_MODE=true
-WAKE_WORDS=джарвис
-VOSK_MODEL_PATH=vosk-model-small-ru-0.22
-
-# --- Conversation ---
-CONVERSATION_TIMEOUT=30
+TTS_BACKEND=say
+TTS_VOICE=Milena
 ```
 
-### 4. Start LM Studio
+The `say` command is built into macOS and works completely offline.
+List available Russian voices: `say -v '?' | grep ru`
+
+**Online (best quality):**
+
+```env
+TTS_BACKEND=edge
+TTS_VOICE=ru-RU-SvetlanaNeural
+```
+
+**Cross-platform offline (robotic but works everywhere):**
+
+```bash
+# Install espeak-ng first:
+#   brew install espeak-ng       (macOS)
+#   apt install espeak-ng        (Linux)
+
+# Then in .env:
+TTS_BACKEND=espeak
+TTS_VOICE=ru
+```
+
+### 5. Start LM Studio
 
 1. Open LM Studio
 2. Load your model (e.g., `google/gemma-4-12b-qat`)
@@ -164,8 +177,9 @@ All settings live in `.env`. See `.env.example` for all options.
 | `VAD_MODE` | `true` | Enable voice activity detection |
 | `VAD_SILENCE_TIMEOUT` | `1.5` | Silence duration (s) before recording stops |
 | `VAD_THRESHOLD` | `0.02` | Energy threshold (lower = more sensitive) |
-| `TTS_BACKEND` | `edge` | `edge`, `yandex`, or `print` (no audio) |
+| `TTS_BACKEND` | `edge` | `edge`, `say`, `espeak`, `yandex`, or `print` |
 | `TTS_VOICE` | `ru-RU-SvetlanaNeural` | Voice name for TTS |
+| `TTS_RATE` | `+0%` | Speech rate: `+0%` normal, `+20%` faster, `-20%` slower |
 | `WAKE_MODE` | `true` | Enable wake word detection |
 | `WAKE_WORDS` | `джарвис` | Comma-separated wake words |
 | `VOSK_MODEL_PATH` | `vosk-model-small-ru-0.22` | Path to Vosk model directory |
@@ -175,12 +189,22 @@ All settings live in `.env`. See `.env.example` for all options.
 
 ### TTS Voices
 
-**Edge TTS** — common Russian voices:
+**Edge TTS** (internet required):
 - `ru-RU-SvetlanaNeural` (female)
 - `ru-RU-DariyaNeural` (female)
 - `ru-RU-DmitryNeural` (male)
 
-List all available voices: `uv run python -m edge_tts --list-voices | grep ru`
+List all: `uv run python -m edge_tts --list-voices | grep ru`
+
+**macOS `say`** (offline, built-in):
+- `Milena` (female, Russian)
+
+List installed: `say -v '?' | grep ru`
+
+**espeak-ng** (offline, cross-platform, robotic):
+- `ru` (Russian)
+
+List all: `espeak-ng --voices | grep ru`
 
 **Yandex SpeechKit** — if `TTS_BACKEND=yandex`, set `YC_API_KEY`, `YC_FOLDER_ID`, `TTS_VOICE=alisa` (or `filipp`, etc.).
 
