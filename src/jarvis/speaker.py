@@ -9,9 +9,22 @@ class Speaker:
     def __init__(self):
         self.playback_process = None
         self.current_file = None
+        self._gen_process = None
+        self._cancelled = False
+
+    def _cancel_gen(self):
+        """Kill the TTS generation subprocess if running."""
+        if self._gen_process and self._gen_process.poll() is None:
+            self._gen_process.kill()
+            try:
+                self._gen_process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                pass
+            self._gen_process = None
 
     def generate_speech(self, text: str) -> str:
         """Generate TTS audio file and return the path. Blocks until done."""
+        self._cancelled = False
         backend = settings.tts_backend
         if backend == "edge":
             return self._generate_edge(text)
@@ -45,7 +58,9 @@ class Speaker:
             self.playback_process = None
 
     def stop_playback(self):
-        """Stop currently playing audio."""
+        """Stop TTS generation AND audio playback immediately."""
+        self._cancelled = True
+        self._cancel_gen()
         if self.playback_process and self.playback_process.poll() is None:
             self.playback_process.terminate()
             try:
@@ -109,6 +124,7 @@ class Speaker:
         """
         Generate speech using macOS built-in `say` command.
         Fully offline. Voice must be installed in the system.
+        Uses Popen so the process can be killed if interrupted.
         """
         voice = settings.tts_voice or "Milena"
         rate = self._parse_say_rate(settings.tts_rate)
@@ -118,12 +134,16 @@ class Speaker:
             if rate is not None:
                 cmd += ["-r", str(rate)]
             cmd += [text]
-            subprocess.run(cmd, check=True, capture_output=True, timeout=60)
+            self._gen_process = subprocess.Popen(
+                cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            self._gen_process.wait(timeout=60)
             if os.path.exists(file_path):
                 return file_path
             return ""
         except subprocess.TimeoutExpired:
             print("  TTS generation timed out")
+            self._cancel_gen()
             return ""
         except Exception as e:
             print(f"  TTS generation error (say): {e}")
@@ -133,8 +153,7 @@ class Speaker:
     def _generate_espeak(self, text: str) -> str:
         """
         Generate speech using espeak-ng (cross-platform, fully offline).
-        Install: brew install espeak-ng  (macOS)
-                 apt install espeak-ng   (Debian/Ubuntu)
+        Uses Popen so the process can be killed if interrupted.
         """
         if not shutil.which("espeak-ng"):
             print("  espeak-ng not found. Install it or use a different TTS backend.")
@@ -142,15 +161,17 @@ class Speaker:
         voice = settings.tts_voice or "ru"
         file_path = "temp_response.wav"
         try:
-            subprocess.run(
+            self._gen_process = subprocess.Popen(
                 ["espeak-ng", "-v", voice, "-w", file_path, "--", text],
-                check=True, capture_output=True, timeout=60,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
+            self._gen_process.wait(timeout=60)
             if os.path.exists(file_path):
                 return file_path
             return ""
         except subprocess.TimeoutExpired:
             print("  TTS generation timed out")
+            self._cancel_gen()
             return ""
         except Exception as e:
             print(f"  TTS generation error (espeak-ng): {e}")

@@ -13,7 +13,16 @@ load_dotenv()
 
 @dataclass
 class Settings:
-    # --- LLM ---
+    # ── Identity ──────────────────────────────────────────
+    agent_name: str = "Jarvis"
+    wake_word_display: str = "Джарвис"
+
+    # ── Wake word detection (Vosk) ────────────────────────
+    wake_mode: bool = True
+    wake_words: list[str] = field(default_factory=lambda: ["джарвис"])
+    vosk_model_path: str = "vosk-model-small-ru-0.22"
+
+    # ── LLM (OpenAI-compatible API) ───────────────────────
     llm_provider: str = "lmstudio"
     llm_base_url: str = "localhost:1234/v1"
     llm_api_key: str = ""
@@ -21,33 +30,23 @@ class Settings:
     llm_temperature: float = 0.7
     llm_max_tokens: int = 1024
 
-    # --- STT ---
+    # ── Speech-to-Text (faster-whisper) ───────────────────
     stt_model: str = "base"
 
-    # --- VAD ---
+    # ── Voice Activity Detection ──────────────────────────
     vad_mode: bool = True
     vad_silence_timeout: float = 1.5
     vad_threshold: float = 0.02
 
-    # --- TTS (Edge) ---
+    # ── Text-to-Speech ────────────────────────────────────
     tts_backend: str = "edge"
     tts_voice: str = "ru-RU-SvetlanaNeural"
     tts_rate: str = "+0%"
 
-    # --- TTS (Yandex) ---
-    yc_api_key: str = ""
-    yc_folder_id: str = ""
-    tts_lang: str = "ru-RU"
-
-    # --- Wake word ---
-    wake_mode: bool = True
-    wake_words: list[str] = field(default_factory=lambda: ["джарвис"])
-    vosk_model_path: str = "vosk-model-small-ru-0.22"
-
-    # --- Conversation ---
+    # ── Conversation ──────────────────────────────────────
     conversation_timeout: int = 30
 
-    # --- Sound feedback ---
+    # ── Sound feedback (beep / ticks) ─────────────────────
     tick_vibro: bool = False
     listen_beep_freq: float = 200
     listen_beep_duration: float = 0.2
@@ -57,8 +56,13 @@ class Settings:
     tick_volume: float = 0.15
     tick_interval: float = 2.0
 
-    # --- System prompt ---
+    # ── System prompt ─────────────────────────────────────
     system_prompt_path: str = ""
+
+    # ── Yandex TTS (advanced) ─────────────────────────────
+    yc_api_key: str = ""
+    yc_folder_id: str = ""
+    tts_lang: str = "ru-RU"
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -72,6 +76,17 @@ class Settings:
         default_prompt = str(Path(__file__).parent / "prompt.txt")
 
         return cls(
+            # ── Identity ──
+            agent_name=os.getenv("AGENT_NAME", "Jarvis"),
+            wake_word_display=os.getenv("WAKE_WORD_DISPLAY", "")
+                          or (wake_words[0].capitalize() if wake_words else "Джарвис"),
+
+            # ── Wake word ──
+            wake_mode=_bool("WAKE_MODE", "true"),
+            wake_words=wake_words,
+            vosk_model_path=os.getenv("VOSK_MODEL_PATH", "vosk-model-small-ru-0.22"),
+
+            # ── LLM ──
             llm_provider=os.getenv("LLM_PROVIDER", "undefined"),
             llm_base_url=os.getenv("LLM_BASE_URL", ""),
             llm_api_key=os.getenv("LLM_API_KEY", ""),
@@ -79,20 +94,23 @@ class Settings:
             llm_temperature=float(os.getenv("LLM_TEMPERATURE", "0.7")),
             llm_max_tokens=int(os.getenv("LLM_MAX_TOKENS", "1024")),
 
+            # ── STT ──
             stt_model=os.getenv("STT_MODEL", "base"),
+
+            # ── VAD ──
             vad_mode=_bool("VAD_MODE", "true"),
             vad_silence_timeout=float(os.getenv("VAD_SILENCE_TIMEOUT", "1.5")),
             vad_threshold=float(os.getenv("VAD_THRESHOLD", "0.02")),
+
+            # ── TTS ──
             tts_backend=os.getenv("TTS_BACKEND", "edge").lower(),
             tts_voice=os.getenv("TTS_VOICE", "ru-RU-SvetlanaNeural"),
             tts_rate=os.getenv("TTS_RATE", "+0%"),
-            yc_api_key=os.getenv("YC_API_KEY", ""),
-            yc_folder_id=os.getenv("YC_FOLDER_ID", ""),
-            tts_lang=os.getenv("TTS_LANG", "ru-RU"),
-            wake_mode=_bool("WAKE_MODE", "true"),
-            wake_words=wake_words,
-            vosk_model_path=os.getenv("VOSK_MODEL_PATH", "vosk-model-small-ru-0.22"),
+
+            # ── Conversation ──
             conversation_timeout=int(os.getenv("CONVERSATION_TIMEOUT", "30")),
+
+            # ── Sound feedback ──
             tick_vibro=_bool("TICK_VIBRO"),
             listen_beep_freq=float(os.getenv("LISTEN_BEEP_FREQ", "200")),
             listen_beep_duration=float(os.getenv("LISTEN_BEEP_DURATION", "0.2")),
@@ -101,20 +119,34 @@ class Settings:
             tick_duration=float(os.getenv("TICK_DURATION", "0.03")),
             tick_volume=float(os.getenv("TICK_VOLUME", "0.15")),
             tick_interval=float(os.getenv("TICK_INTERVAL", "2.0")),
+
+            # ── System prompt ──
             system_prompt_path=os.getenv("SYSTEM_PROMPT_PATH", default_prompt),
+
+            # ── Yandex TTS ──
+            yc_api_key=os.getenv("YC_API_KEY", ""),
+            yc_folder_id=os.getenv("YC_FOLDER_ID", ""),
+            tts_lang=os.getenv("TTS_LANG", "ru-RU"),
         )
 
     def load_system_prompt(self) -> str:
-        """Read the system prompt from the configured file."""
+        """Read the system prompt from the configured file.
+        Substitutes __AGENT_NAME__ and __WAKE_WORD__ with configured values.
+        """
         path = Path(self.system_prompt_path)
         if path.exists():
-            return path.read_text(encoding="utf-8").strip()
-        # Fallback if file is missing
-        return (
-            "You are Jarvis (Джарвис), a voice AI assistant. "
-            "Respond concisely and conversationally. "
-            'End with "[END]" when the conversation is finished.'
-        )
+            prompt = path.read_text(encoding="utf-8").strip()
+        else:
+            # Fallback if file is missing
+            prompt = (
+                f"You are {self.agent_name} ({self.wake_word_display}), "
+                "a voice AI assistant. "
+                "Respond concisely and conversationally. "
+                'End with "[END]" when the conversation is finished.'
+            )
+        prompt = prompt.replace("__AGENT_NAME__", self.agent_name)
+        prompt = prompt.replace("__WAKE_WORD__", self.wake_word_display)
+        return prompt
 
 
 # Module-level singleton — import this in all other modules

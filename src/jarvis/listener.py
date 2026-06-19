@@ -14,21 +14,13 @@ class Listener:
         self.vad_threshold = settings.vad_threshold
         self._pre_wake_file = None
 
+        # Always use local faster-whisper (offline, fast, independent of LLM)
+        from faster_whisper import WhisperModel
+        self.model = WhisperModel(settings.stt_model, device="cpu", compute_type="int8")
+
     def set_pre_wake(self, file_path: str | None):
         """Set a pre-wake buffer file to prepend to the next recording."""
         self._pre_wake_file = file_path
-
-        if settings.llm_provider == "lmstudio":
-            from faster_whisper import WhisperModel
-            self.model = WhisperModel(settings.stt_model, device="cpu", compute_type="int8")
-            self.transcriber = self._transcribe_local
-        else:
-            from openai import OpenAI
-            self.client = OpenAI(
-                base_url=settings.llm_base_url or None,
-                api_key=settings.llm_api_key,
-            )
-            self.transcriber = self._transcribe_api
 
     def record_audio(self) -> str:
         if self.vad_mode:
@@ -137,19 +129,7 @@ class Listener:
         if not os.path.exists(audio_file) or os.path.getsize(audio_file) < 1000:
             return ""
         print(f"📝 Transcribing...")
-        return self.transcriber(audio_file)
-
-    def _transcribe_api(self, audio_file: str) -> str:
-        try:
-            with open(audio_file, "rb") as f:
-                transcript = self.client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=f
-                )
-            return transcript.text
-        except Exception as e:
-            print(f"❌ Transcription error: {e}")
-            return ""
+        return self._transcribe_local(audio_file)
 
     def _transcribe_local(self, audio_file: str) -> str:
         try:

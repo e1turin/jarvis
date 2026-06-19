@@ -13,7 +13,7 @@ class WakeWordDetector:
         self.sample_rate = 16000
         self.model = Model(settings.vosk_model_path)
         self.wake_words = settings.wake_words
-        print(f"🔊 Vosk model loaded | Wake words: {', '.join(self.wake_words)}")
+        print(f"🔊 Vosk model loaded | Wake word: {settings.wake_word_display}")
 
         # Rolling buffer for pre-wake audio (~3 seconds)
         # blocksize=8000 at 16kHz => 0.5s per block, so maxlen=6 for 3 seconds
@@ -27,7 +27,7 @@ class WakeWordDetector:
         the wake word is preserved.
         Returns True when detected, False on Ctrl+C.
         """
-        print("💤 Waiting... (say: Джарвис)")
+        print(f"💤 Waiting... (say: {settings.wake_word_display})")
         print("   Press Ctrl+C to exit.")
 
         recognizer = KaldiRecognizer(self.model, self.sample_rate)

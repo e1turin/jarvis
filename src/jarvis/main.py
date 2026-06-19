@@ -9,7 +9,10 @@ from jarvis.config import settings
 
 
 def main():
-    print("--- Jarvis Voice AI Assistant ---")
+    name = settings.agent_name
+    wake = settings.wake_word_display
+
+    print(f"--- {name} Voice AI Assistant ---")
     print("Initializing modules...")
 
     brain = JarvisBrain()
@@ -24,7 +27,7 @@ def main():
     if settings.wake_mode:
         # Main wake word detector for initial activation
         wake_detector = WakeWordDetector()
-        print("Say 'Jarvis' or 'Джарвис' to wake me up.")
+        print(f"Say '{wake}' to wake me up.")
     else:
         wake_detector = None
 
@@ -40,7 +43,7 @@ def main():
 
             # --- Conversation mode with barge-in ---
             play_listen_sound()
-            print("🎙️ Conversation started. Say 'Джарвис' to interrupt me.\n")
+            print(f"🎙️ Conversation started. Say '{wake}' to interrupt me.\n")
 
             last_activity = time.time()
             should_sleep = False
@@ -110,7 +113,7 @@ def main():
                     break
 
                 # --- Speak with barge-in support ---
-                print(f"Jarvis: {result.text}")
+                print(f"{name}: {result.text}")
 
                 if settings.tts_backend == "print":
                     print()
@@ -128,7 +131,7 @@ def main():
 
                     def _gen_and_play():
                         fp = speaker.generate_speech(result.text)
-                        if fp:
+                        if fp and not speaker._cancelled:
                             speaker.play_async(fp)
                         gen_done.set()
 
