@@ -22,6 +22,7 @@ temp_response.mp3
 temp_response.ogg
 temp_listen.wav
 temp_tick.wav
+temp_pre_wake.wav
 
 # Environment files (private)
 .env

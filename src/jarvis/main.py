@@ -34,6 +34,8 @@ def main():
                 detected = wake_detector.wait_for_wake_word()
                 if not detected:
                     break
+                # Pass pre-wake buffer to listener so speech before/during wake word isn't lost
+                listener.set_pre_wake(wake_detector.get_pre_buffer_file())
 
             # --- Conversation mode with barge-in ---
             play_listen_sound()
