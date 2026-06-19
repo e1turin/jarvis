@@ -1,4 +1,5 @@
 import time
+import threading
 from jarvis.brain import JarvisBrain
 from jarvis.listener import Listener
 from jarvis.speaker import Speaker
@@ -85,32 +86,48 @@ def main():
                     print()
                     continue
 
-                # Generate audio
-                file_path = speaker.generate_speech(result.text)
-                if not file_path:
-                    print()
-                    continue
-
                 # Check if response contains wake words (would cause self-interruption via echo)
                 response_mentions_wake = False
                 if barge_detector and result.text:
                     text_lower = result.text.lower()
                     response_mentions_wake = any(ww in text_lower for ww in barge_detector.wake_words)
 
-                # Play and monitor for barge-in (persistent stream, no blinking)
-                speaker.play_async(file_path)
-                interrupted = False
+                if barge_detector and not response_mentions_wake:
+                    # ── Non-blocking: generate TTS in background thread ────────────
+                    # Monitor mic from the start of generation through end of playback,
+                    # so user can interrupt at any time (even during slow TTS generation).
+                    gen_done = threading.Event()
 
-                if barge_detector and speaker.is_playing() and not response_mentions_wake:
-                    interrupted = barge_detector.wait_for_barge_in(speaker.is_playing)
+                    def _gen_and_play():
+                        fp = speaker.generate_speech(result.text)
+                        if fp:
+                            speaker.play_async(fp)
+                        gen_done.set()
 
-                if interrupted:
-                    speaker.stop_playback()
-                    print("⏹️ Interrupted!\n")
+                    thread = threading.Thread(target=_gen_and_play, daemon=True)
+                    thread.start()
+
+                    # Monitor for wake word during generation AND playback
+                    interrupted = barge_detector.wait_for_barge_in(
+                        lambda: thread.is_alive() or speaker.is_playing()
+                    )
+
+                    if interrupted:
+                        speaker.stop_playback()
+                        print("⏹️ Interrupted!\n")
+                    else:
+                        # Ensure playback finished
+                        gen_done.wait(timeout=10)
+                        if speaker.playback_process:
+                            speaker.playback_process.wait()
+                        print()
                 else:
-                    # Wait for playback to finish
-                    if speaker.playback_process:
-                        speaker.playback_process.wait()
+                    # ── Blocking mode: no barge-in (echo risk or no detector) ──
+                    file_path = speaker.generate_speech(result.text)
+                    if file_path:
+                        speaker.play_async(file_path)
+                        if speaker.playback_process:
+                            speaker.playback_process.wait()
                     print()
 
         except KeyboardInterrupt:
