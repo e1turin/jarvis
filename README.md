@@ -10,7 +10,8 @@ Speak to it, it talks back. Wake word ("Джарвис"), STT, LLM, TTS — all 
 - **Speech-to-Text** — Local transcription via faster-whisper
 - **LLM reasoning** — Any OpenAI-compatible API (LM Studio or Ollama)
 - **Text-to-Speech** — Multiple backends: macOS `say` (offline, built-in), `edge-tts` (online, best quality), `espeak-ng` (offline, cross-platform)
-- **Continuous barge-in** — Say "Джарвис" at any time to interrupt — even during TTS generation or playback
+- **Continuous barge-in** — Say "Джарвис" at any time to interrupt — during LLM thinking, TTS generation, or playback
+- **Conversation history integrity** — Interrupted turns leave no trace in history. The LLM always sees a clean, sequential conversation
 - **Rolling pre-wake buffer** — Speech right before the wake word is preserved, not lost
 - **Conversation control** — LLM decides when the conversation is done (via `[END]` marker)
 - **Sleep timeout** — Returns to wake-word listening after inactivity
