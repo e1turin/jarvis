@@ -16,23 +16,13 @@ class ChatResult(BaseModel):
 
 class JarvisBrain:
     def __init__(self, model: str = None):
-        base_url = settings.llm_base_url or None
-        api_key = settings.llm_api_key
-        model_name = model or settings.llm_model
-
-        client_kwargs = {
-            "base_url": base_url,
-            "timeout": 30.0,
-            "max_retries": 1,
-        }
-
-        if settings.llm_provider == "lmstudio":
-            client_kwargs["api_key"] = api_key or "lm-studio"
-        else:
-            client_kwargs["api_key"] = settings.openai_api_key or api_key
-
-        self.client = OpenAI(**client_kwargs)
-        self.model = model_name
+        self.client = OpenAI(
+            base_url=settings.llm_base_url or None,
+            api_key=settings.llm_api_key,
+            timeout=30.0,
+            max_retries=1,
+        )
+        self.model = model or settings.llm_model
 
         system_prompt = settings.load_system_prompt()
         self.history: List[Message] = [

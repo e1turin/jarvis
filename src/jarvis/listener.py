@@ -21,7 +21,7 @@ class Listener:
             from openai import OpenAI
             self.client = OpenAI(
                 base_url=settings.llm_base_url or None,
-                api_key=settings.openai_api_key or settings.llm_api_key,
+                api_key=settings.llm_api_key,
             )
             self.transcriber = self._transcribe_api
 

@@ -14,11 +14,10 @@ load_dotenv()
 @dataclass
 class Settings:
     # --- LLM ---
-    llm_provider: str = "openai"
-    llm_base_url: str = ""
+    llm_provider: str = "lmstudio"
+    llm_base_url: str = "localhost:1234/v1"
     llm_api_key: str = ""
-    llm_model: str = "gpt-4o"
-    openai_api_key: str = ""
+    llm_model: str = "google/gemma-4-12b-qat"
 
     # --- STT ---
     stt_model: str = "base"
@@ -70,11 +69,11 @@ class Settings:
         default_prompt = str(Path(__file__).parent / "prompt.txt")
 
         return cls(
-            llm_provider=os.getenv("LLM_PROVIDER", "openai").lower(),
+            llm_provider=os.getenv("LLM_PROVIDER", "undefined"),
             llm_base_url=os.getenv("LLM_BASE_URL", ""),
             llm_api_key=os.getenv("LLM_API_KEY", ""),
-            llm_model=os.getenv("LLM_MODEL", "gpt-4o"),
-            openai_api_key=os.getenv("OPENAI_API_KEY", ""),
+            llm_model=os.getenv("LLM_MODEL", "undefined"),
+
             stt_model=os.getenv("STT_MODEL", "base"),
             vad_mode=_bool("VAD_MODE", "true"),
             vad_silence_timeout=float(os.getenv("VAD_SILENCE_TIMEOUT", "1.5")),
