@@ -13,6 +13,12 @@ from scipy.io import wavfile
 from jarvis.config import settings
 
 
+_TEMP_DIR = settings.temp_dir
+
+
+def _temp_path(name: str) -> str:
+    return os.path.join(_TEMP_DIR, name)
+
 
 def _generate_beep(freq: float, duration: float, volume: float) -> np.ndarray:
     """Generate a sine wave tone with fade in/out."""
@@ -70,9 +76,9 @@ def _tick_feedback():
                 stderr=subprocess.DEVNULL,
             )
         except Exception:
-            _play_async("temp_tick.wav")
+            _play_async(_temp_path("temp_tick.wav"))
     else:
-        _play_async("temp_tick.wav")
+        _play_async(_temp_path("temp_tick.wav"))
 
 
 def play_listen_sound():
@@ -81,12 +87,12 @@ def play_listen_sound():
     Plays synchronously so the beep finishes before recording starts.
     """
     _write_beep(
-        "temp_listen.wav",
+        _temp_path("temp_listen.wav"),
         freq=settings.listen_beep_freq,
         duration=settings.listen_beep_duration,
         volume=settings.listen_beep_volume,
     )
-    _play_blocking("temp_listen.wav")
+    _play_blocking(_temp_path("temp_listen.wav"))
 
 
 def play_thinking_ticks():
@@ -95,7 +101,7 @@ def play_thinking_ticks():
     stop_thinking_ticks()
     # Pre-generate tick with current settings
     _write_beep(
-        "temp_tick.wav",
+        _temp_path("temp_tick.wav"),
         freq=settings.tick_freq,
         duration=settings.tick_duration,
         volume=settings.tick_volume,

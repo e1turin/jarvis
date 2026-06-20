@@ -4,22 +4,37 @@ from collections import deque
 import numpy as np
 import sounddevice as sd
 from scipy.io import wavfile
-from vosk import Model, KaldiRecognizer
+from vosk import Model, KaldiRecognizer, SetLogLevel
 from jarvis.config import settings
+
+# Suppress verbose Vosk C++ LOG messages (they spam stderr on every load)
+SetLogLevel(-1)
+
+# Shared Vosk model instance (loaded once, reused by all detectors)
+_VOSK_MODEL: Model | None = None
+
+
+def _get_vosk_model() -> Model:
+    global _VOSK_MODEL
+    if _VOSK_MODEL is None:
+        _VOSK_MODEL = Model(settings.vosk_model_path)
+        wake_list = ", ".join(settings.wake_words)
+        print(f"🔊 Vosk model loaded | Wake words: {wake_list}")
+    return _VOSK_MODEL
 
 
 class WakeWordDetector:
     def __init__(self):
         self.sample_rate = settings.audio_sample_rate
-        self.model = Model(settings.vosk_model_path)
+        self.model = _get_vosk_model()
         self.wake_words = settings.wake_words
-        print(f"🔊 Vosk model loaded | Wake word: {settings.wake_word_display}")
+        self.temp_dir = settings.temp_dir
 
         # Rolling buffer for pre-wake audio
         # blocksize=0.5s at sample_rate => 0.5s per block
         self._pre_buffer_blocks = int(settings.pre_wake_buffer_seconds / 0.5)
         self._pre_buffer = deque(maxlen=self._pre_buffer_blocks)
-        self._pre_buffer_file = "temp_pre_wake.wav"
+        self._pre_buffer_file = os.path.join(self.temp_dir, "temp_pre_wake.wav")
 
     def wait_for_wake_word(self) -> bool:
         """
@@ -116,6 +131,8 @@ class WakeWordDetector:
                         text = partial.get("partial", "").strip().lower()
                         if any(ww in text for ww in self.wake_words):
                             return True
-        except Exception:
-            pass
+        except Exception as e:
+            # Log barge-in errors but don't crash — treat as "not interrupted"
+            import traceback
+            traceback.print_exc()
         return False

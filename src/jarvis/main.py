@@ -1,6 +1,10 @@
+"""
+Main orchestrator — ties together wake detection, conversation, and TTS.
+"""
+
 import time
 import threading
-from jarvis.brain import JarvisBrain
+from jarvis.brain import ConversationManager
 from jarvis.listener import Listener
 from jarvis.speaker import Speaker
 from jarvis.wake import WakeWordDetector
@@ -15,17 +19,16 @@ def main():
     print(f"--- {name} Voice AI Assistant ---")
     print("Initializing modules...")
 
-    brain = JarvisBrain()
+    brain = ConversationManager()
     listener = Listener()
     speaker = Speaker()
 
-    print(f"System ready. Provider: {settings.llm_provider} | Model: {brain.model}")
+    print(f"System ready. Provider: {brain.llm.provider_label} | Model: {brain.llm.model} | Built-in tools: web_search")
 
-    # Create a wake word detector for barge-in (shared model)
+    # Create wake word detectors
     barge_detector = WakeWordDetector() if settings.wake_mode else None
 
     if settings.wake_mode:
-        # Main wake word detector for initial activation
         wake_detector = WakeWordDetector()
         print(f"Say '{wake}' to wake me up.")
     else:
@@ -38,7 +41,6 @@ def main():
                 detected = wake_detector.wait_for_wake_word()
                 if not detected:
                     break
-                # Pass pre-wake buffer to listener so speech before/during wake word isn't lost
                 listener.set_pre_wake(wake_detector.get_pre_buffer_file())
 
             # --- Conversation mode with barge-in ---
@@ -61,7 +63,7 @@ def main():
 
                 last_activity = time.time()
 
-                # Check for sleep commands (from config)
+                # Check for sleep commands
                 sleep_words = {w.strip().lower() for w in settings.sleep_words.split(",")}
                 if user_text.strip().lower() in sleep_words:
                     speaker.speak("Хорошо. Позовите, если понадоблюсь.")
@@ -73,7 +75,6 @@ def main():
                 play_thinking_ticks()
 
                 # ── Think with barge-in ───────────────────────────────────────
-                # Run LLM in background thread so mic can be monitored during thinking.
                 thinking_done = threading.Event()
                 thinking_result = [None]
 
@@ -101,7 +102,7 @@ def main():
                 stop_thinking_ticks()
                 result = thinking_result[0]
 
-                # Commit to history now that we know the turn wasn't interrupted
+                # Commit to history (only if not interrupted)
                 brain.commit_turn(user_text, result)
 
                 if result.action == "end":
@@ -117,14 +118,16 @@ def main():
                     print()
                     continue
 
-                # Check if response contains wake words (would cause self-interruption via echo)
+                # Check if response contains wake words (echo protection)
                 response_mentions_wake = False
                 if barge_detector and result.text:
                     text_lower = result.text.lower()
-                    response_mentions_wake = any(ww in text_lower for ww in barge_detector.wake_words)
+                    response_mentions_wake = any(
+                        ww in text_lower for ww in barge_detector.wake_words
+                    )
 
                 if barge_detector and not response_mentions_wake:
-                    # ── Non-blocking: generate TTS in background thread ────────────
+                    # ── Non-blocking: generate TTS in background thread ──────
                     gen_done = threading.Event()
 
                     def _gen_and_play():
@@ -146,16 +149,16 @@ def main():
                         print("⏹️ Interrupted!\n")
                     else:
                         gen_done.wait(timeout=10)
-                        if speaker.playback_process:
-                            speaker.playback_process.wait()
+                        speaker.player.wait()
                         print()
                 else:
-                    # ── Blocking mode: no barge-in (echo risk or no detector) ──
+                    if response_mentions_wake:
+                        print("  (blocking mode — response mentions wake word)")
+                    # ── Blocking mode: no barge-in ──────────────────────────
                     file_path = speaker.generate_speech(result.text)
                     if file_path:
                         speaker.play_async(file_path)
-                        if speaker.playback_process:
-                            speaker.playback_process.wait()
+                        speaker.player.wait()
                     print()
 
         except KeyboardInterrupt:

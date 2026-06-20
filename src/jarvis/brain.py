@@ -1,12 +1,32 @@
-from typing import List
-from openai import OpenAI, APIError, APITimeoutError, APIConnectionError
+"""
+Conversation manager — orchestrates the LLM + tools + history.
+
+This module ties together:
+  - LLMClient  (pure API calls from llm.py)
+  - tools      (tool definitions + implementations from tools.py)
+  - history    (conversation state management)
+
+The flow per user message:
+  1. Append user input to conversation copy
+  2. Call LLM with optional tool definitions
+  3. If LLM returns tool_calls → execute tools → loop back to step 2
+  4. If LLM returns text → return ChatResult
+  5. If interrupted → discard the turn (caller must NOT commit)
+"""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
 from pydantic import BaseModel
+
 from jarvis.config import settings
+from jarvis.llm import LLMClient, LLMAPIError, LLMConnectionError, LLMTimeoutError
+from jarvis.tools import get_builtin_tool_defs, execute_tool
 
-
-class Message(BaseModel):
-    role: str
-    content: str
+# Maximum tool call iterations per user message (prevents infinite loops)
+MAX_TOOL_ITERATIONS = 5
 
 
 class ChatResult(BaseModel):
@@ -14,96 +34,159 @@ class ChatResult(BaseModel):
     action: str = "continue"  # "continue" or "end"
 
 
-class JarvisBrain:
-    def __init__(self, model: str = None):
-        # Proxy is auto-detected from HTTP_PROXY / HTTPS_PROXY / NO_PROXY
-        # environment variables (loaded from .env by python-dotenv).
-        # httpx (used by OpenAI) reads these automatically and respects NO_PROXY,
-        # so localhost traffic (LM Studio / Ollama) bypasses the proxy.
-        self.client = OpenAI(
-            base_url=settings.llm_base_url or None,
-            api_key=settings.llm_api_key,
-            timeout=settings.llm_timeout,
-            max_retries=settings.llm_max_retries,
-        )
-        self.model = model or settings.llm_model
+class ConversationManager:
+    """
+    Manages a single conversation with the LLM.
+
+    Usage:
+        brain = ConversationManager(mcp_tool_call=mcp_call_fn)
+        result = brain.send_message("Hello")
+        brain.commit_turn("Hello", result)  # only if not interrupted
+    """
+
+    def __init__(self):
+        self.llm = LLMClient()
 
         system_prompt = settings.load_system_prompt()
-        self.history: List[Message] = [
-            Message(role="system", content=system_prompt)
+        # Immutable history — caller must call commit_turn() to append
+        self.history: list[dict[str, Any]] = [
+            {"role": "system", "content": system_prompt}
         ]
+
+    # ── Tool definitions ───────────────────────────────────────
+
+    def get_tools(self) -> list[dict]:
+        """Return all available tool definitions (built-in only)."""
+        return get_builtin_tool_defs()
+
+    # ── Main message send ──────────────────────────────────────
 
     def send_message(self, user_input: str) -> ChatResult:
         """
-        Send user input to the LLM and get a response.
-        Does NOT modify self.history — caller must call commit_turn() on success.
-        This allows the caller to discard the turn if interrupted.
+        Send user input and get a response.
+        Runs the tool-calling loop automatically.
+        Does NOT modify self.history — caller must call commit_turn().
         """
-        # Build messages from history + new input, without modifying history
-        messages = [msg.model_dump() for msg in self.history]
+        messages = list(self.history)
         messages.append({"role": "user", "content": user_input})
 
-        try:
-            print(f"🧠 Thinking...")
+        tools = self.get_tools()
+        tools_disabled = False  # Flag: retry without tools on Gemini errors
 
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=settings.llm_temperature,
-                max_tokens=settings.llm_max_tokens,
+        for iteration in range(MAX_TOOL_ITERATIONS):
+            print(
+                "🧠 Thinking..."
+                if iteration == 0
+                else f"🔄 Tool result round {iteration + 1}..."
             )
-            reply = response.choices[0].message.content
 
-            # Check for [END] marker
-            end_marker = "[END]"
-            if reply.rstrip().endswith(end_marker):
-                text = reply.rstrip()[:-len(end_marker)].strip()
-                return ChatResult(text=text, action="end")
+            # ── Call LLM (with fallback for Gemini thought_signature) ──
+            try:
+                response = self.llm.send(
+                    messages,
+                    tools=tools if not tools_disabled else None,
+                )
+            except LLMAPIError as e:
+                error_str = str(e).lower()
+                if (
+                    "thought_signature" in error_str
+                    and not tools_disabled
+                ):
+                    print(
+                        "  ⚠️ Model doesn't support function calling via this API,"
+                        " retrying without tools"
+                    )
+                    tools_disabled = True
+                    response = self.llm.send(messages, tools=None)
+                else:
+                    return ChatResult(text=f"LLM Error: {e}", action="end")
+            except LLMConnectionError as e:
+                return ChatResult(text=str(e), action="end")
+            except LLMTimeoutError as e:
+                return ChatResult(text=str(e), action="end")
 
-            return ChatResult(text=reply, action="continue")
+            choice = response.choices[0]
+            message = choice.message
 
-        except APIConnectionError:
-            return ChatResult(
-                text="Could not connect to the LLM server. Is LM Studio running and the server started?",
-                action="end"
-            )
-        except APITimeoutError:
-            return ChatResult(
-                text="LLM request timed out. The model may still be loading.",
-                action="end"
-            )
-        except APIError as e:
-            return ChatResult(text=f"LLM Error: {e}", action="end")
-        except Exception as e:
-            return ChatResult(text=f"Unexpected error: {str(e)}", action="end")
+            # ── No tool call: return text ──────────────────────
+            if not message.tool_calls:
+                reply = message.content or ""
+                if reply.rstrip().endswith("[END]"):
+                    text = reply.rstrip()[: -len("[END]")].strip()
+                    return ChatResult(text=text, action="end")
+                return ChatResult(text=reply, action="continue")
+
+            # Tools disabled but LLM still returned tool_calls — unlikely but handle
+            if tools_disabled:
+                return ChatResult(text=message.content or "", action="continue")
+
+            # ── Tool call(s) received ──────────────────────────
+            # Add assistant message with tool_calls to context
+            assistant_msg: dict[str, Any] = {
+                "role": "assistant",
+                "content": message.content or "",
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments,
+                        },
+                    }
+                    for tc in message.tool_calls
+                ],
+            }
+            messages.append(assistant_msg)
+
+            # Execute each tool and add results
+            for tc in message.tool_calls:
+                tool_name = tc.function.name
+                try:
+                    tool_args = json.loads(tc.function.arguments)
+                except json.JSONDecodeError:
+                    tool_args = {}
+
+                print(f"   🔧 Calling tool: {tool_name}({tool_args})")
+
+                result_text = execute_tool(
+                    tool_name,
+                    tool_args,
+                )
+
+                # Truncate very long results
+                if len(result_text) > 2000:
+                    result_text = result_text[:2000] + "\n... (truncated)"
+
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": result_text,
+                })
+
+        # Maximum iterations reached
+        print("  ⚠️ Tool call limit reached, returning last response")
+        final = messages[-1].get("content", "I'm still working on that.")
+        return ChatResult(text=final, action="continue")
+
+    # ── History management ─────────────────────────────────────
 
     def commit_turn(self, user_input: str, result: ChatResult):
         """
-        Commit a completed turn to conversation history.
-        Call this only after send_message() succeeds and was not interrupted.
+        Commit a completed (non-interrupted) turn to history.
         """
-        self.history.append(Message(role="user", content=user_input))
-        self.history.append(Message(role="assistant", content=result.text))
+        self.history.append({"role": "user", "content": user_input})
+        self.history.append({"role": "assistant", "content": result.text})
 
     def chat(self, user_input: str) -> ChatResult:
         """
-        Original chat method — sends message AND commits to history.
-        Kept for backward compatibility (used by standalone test).
+        Convenience: send_message + commit_turn in one call.
         """
         result = self.send_message(user_input)
         self.commit_turn(user_input, result)
         return result
 
 
-if __name__ == "__main__":
-    brain = JarvisBrain()
-    print(f"Jarvis Brain initialized | Model: {brain.model}")
-    print("Type 'quit' to exit.")
-    while True:
-        user_input = input("You: ")
-        if user_input.lower() in ["quit", "exit", "bye"]:
-            break
-        result = brain.chat(user_input)
-        print(f"Jarvis: {result.text}")
-        if result.action == "end":
-            print("(END)")
+# ── Aliases for backward compatibility ─────────────────────────
+# Old code imported JarvisBrain. It's now ConversationManager.
+JarvisBrain = ConversationManager

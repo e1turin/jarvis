@@ -10,9 +10,10 @@ Speak to it, it talks back. Wake word ("Джарвис"), STT, LLM, TTS — all 
 - **Speech-to-Text** — Local transcription via faster-whisper
 - **LLM reasoning** — Any OpenAI-compatible API (LM Studio or Ollama)
 - **Text-to-Speech** — Multiple backends: macOS `say` (offline, built-in), `edge-tts` (online, best quality), `espeak-ng` (offline, cross-platform)
-- **Continuous barge-in** — Say "Джарвис" at any time to interrupt — during LLM thinking, TTS generation, or playback
+- **Continuous barge-in** — Say the wake word at any time to interrupt — during LLM thinking, TTS generation, or playback
 - **Conversation history integrity** — Interrupted turns leave no trace in history. The LLM always sees a clean, sequential conversation
 - **Rolling pre-wake buffer** — Speech right before the wake word is preserved, not lost
+- **Built-in web search** — Ask "what's the weather?" or "search for..." and Jarvis searches DuckDuckGo (free, no API key, no setup)
 - **Conversation control** — LLM decides when the conversation is done (via `[END]` marker)
 - **Sleep timeout** — Returns to wake-word listening after inactivity
 
@@ -187,38 +188,88 @@ The LLM will naturally end the conversation with `[END]` when it determines the 
 
 ## Configuration Reference
 
-All settings live in `.env`. See `.env.example` for all options.
+All settings live in `.env`. Copy the template (`cp .env.example .env`) and edit.
+Settings are split into two groups:
+
+| Group | Sections | Who needs it |
+|-------|----------|-------------|
+| **🟢 Simple** | 1–4 | Everyone — these are the core settings to get Jarvis running |
+| **🟠 Advanced** | 5–13 | Only if you need to tweak wake word, VAD, STT, sound, proxy, etc. |
+
+---
+
+## 🟢 SIMPLE SETTINGS
+
+### Section 1 — Identity
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AGENT_NAME` | `Jarvis` | Agent name used in console messages (`--- Jarvis ---`, `Jarvis: text`) |
-| `WAKE_WORD_DISPLAY` | `Джарвис` | Wake word display in user messages (`Say 'Джарвис' ...`). Falls back to first wake word (capitalized) |
-| `WAKE_MODE` | `true` | Enable wake word detection |
-| `WAKE_WORDS` | `джарвис` | Comma-separated wake words (lowercase) |
-| `VOSK_MODEL_PATH` | `vosk-model-small-ru-0.22` | Path to Vosk model directory |
-| `PRE_WAKE_BUFFER_SECONDS` | `3.0` | Seconds of audio kept before wake word (rolling buffer) |
-| `LLM_BASE_URL` | `http://localhost:1234/v1` | API base URL |
-| `LLM_API_KEY` | — | API key |
+| `AGENT_NAME` | `Jarvis` | Agent name used in console (`--- Jarvis ---`, `Jarvis: text`) |
+| `WAKE_WORD_DISPLAY` | `Джарвис` | Display name for wake word in UI. Falls back to first WAKE_WORDS entry (capitalized) |
+| `WAKE_WORDS` | `джарвис` | Comma-separated wake words (lowercase) that trigger/interrupt |
+
+### Section 2 — LLM (OpenAI-compatible API)
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LLM_BASE_URL` | `http://localhost:1234/v1` | API base URL (LM Studio, Ollama, OpenAI) |
+| `LLM_API_KEY` | — | API key (not needed for LM Studio) |
 | `LLM_MODEL` | `google/gemma-4-12b-qat` | Model name |
 | `LLM_TEMPERATURE` | `0.7` | Response creativity (0.0–1.0) |
 | `LLM_MAX_TOKENS` | `1024` | Max response length |
 | `LLM_TIMEOUT` | `30` | HTTP client timeout (s) |
 | `LLM_MAX_RETRIES` | `1` | Max API retries on failure |
-| `HTTP_PROXY` | — | HTTP proxy URL (`http://host:port`) |
-| `HTTPS_PROXY` | — | HTTPS proxy URL. Also used for SOCKS5 (`socks5://host:1080`) |
-| `NO_PROXY` | — | Comma-separated hosts to bypass proxy |
-| `AUDIO_SAMPLE_RATE` | `16000` | Sample rate for mic capture (Hz) |
-| `STT_MODEL` | `base` | faster-whisper model size: `tiny`, `base`, `small`, `medium`, `large-v3` |
-| `VAD_MODE` | `true` | Enable voice activity detection |
-| `VAD_SILENCE_TIMEOUT` | `1.5` | Silence duration (s) before recording stops |
+
+### Section 3 — Text-to-Speech
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TTS_BACKEND` | `edge` | Backend: `edge`, `say`, `espeak`, `yandex`, or `print` |
+| `TTS_VOICE` | `ru-RU-SvetlanaNeural` | Voice name |
+| `TTS_RATE` | `+0%` | Speech rate: `+0%` normal, `+20%` faster, `-20%` slower |
+| `TTS_VOLUME` | `1.0` | Playback volume (0.0–1.0, macOS `afplay` only) |
+| `TTS_GEN_TIMEOUT` | `60` | TTS generation timeout (s) |
+
+### Section 4 — Conversation
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CONVERSATION_TIMEOUT` | `30` | Inactivity timeout (s) before returning to sleep |
+| `SLEEP_WORDS` | `пока,...` | Comma-separated words to end conversation |
+
+---
+
+## 🟠 ADVANCED SETTINGS
+
+### Section 5 — Wake Word Detection (Vosk)
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WAKE_MODE` | `true` | Enable wake word detection (false = always listening) |
+| `VOSK_MODEL_PATH` | `vosk-model-small-ru-0.22` | Path to Vosk model directory |
+| `PRE_WAKE_BUFFER_SECONDS` | `3.0` | Seconds of audio kept before wake word (rolling buffer) |
+
+> Wake words themselves are set in **Section 1** (`WAKE_WORDS`). This section covers detection behaviour.
+
+### Section 6 — Voice Activity Detection
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VAD_MODE` | `true` | Enable VAD (false = record fixed duration) |
+| `VAD_SILENCE_TIMEOUT` | `1.5` | Silence (s) before recording stops |
 | `VAD_THRESHOLD` | `0.02` | Energy threshold (lower = more sensitive) |
 | `VAD_BLOCK_SIZE_MS` | `50` | VAD analysis window (ms) |
-| `LISTENER_MAX_WAIT` | `10` | Max seconds to wait for speech before VAD gives up |
-| `TTS_BACKEND` | `edge` | `edge`, `say`, `espeak`, `yandex`, or `print` |
-| `TTS_VOICE` | `ru-RU-SvetlanaNeural` | Voice name for TTS |
-| `TTS_RATE` | `+0%` | Speech rate: `+0%` normal, `+20%` faster, `-20%` slower |
-| `TTS_GEN_TIMEOUT` | `60` | TTS generation timeout (s) |
-| `CONVERSATION_TIMEOUT` | `30` | Inactivity timeout (s) before sleep |
-| `SLEEP_WORDS` | `пока,...` | Comma-separated words to end conversation |
+| `LISTENER_MAX_WAIT` | `10` | Max seconds to wait for initial speech before giving up |
+
+### Section 7 — Speech-to-Text (faster-whisper)
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `STT_MODEL` | `base` | Model size: `tiny`, `base`, `small`, `medium`, `large-v3` |
+| `STT_DEVICE` | `cpu` | Device: `cpu` or `cuda` |
+| `STT_COMPUTE_TYPE` | `int8` | Compute type: `int8`, `float16`, `float32` |
+
+### Section 8 — Audio / Microphone
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AUDIO_SAMPLE_RATE` | `16000` | Sample rate for mic capture (Hz) |
+
+### Section 9 — Sound Feedback (beep / ticks)
+| Variable | Default | Description |
+|----------|---------|-------------|
 | `TICK_VIBRO` | `false` | Use system beep for tick (may trigger haptic on Force Touch Macs) |
 | `LISTEN_BEEP_FREQ` | `200` | Listening beep frequency (Hz) |
 | `LISTEN_BEEP_DURATION` | `0.2` | Listening beep duration (s) |
@@ -227,8 +278,31 @@ All settings live in `.env`. See `.env.example` for all options.
 | `TICK_DURATION` | `0.03` | Thinking tick duration (s) |
 | `TICK_VOLUME` | `0.15` | Thinking tick volume (0.0–1.0) |
 | `TICK_INTERVAL` | `2.0` | Interval between thinking ticks (s) |
-| `SOUNDS_SAMPLE_RATE` | `22050` | Sample rate for beep/tick generation |
+| `SOUNDS_SAMPLE_RATE` | `22050` | Sample rate for beep/tick WAV generation |
+
+### Section 10 — Proxy (HTTP / HTTPS / SOCKS5)
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HTTP_PROXY` | — | HTTP proxy URL (`http://host:port`) |
+| `HTTPS_PROXY` | — | HTTPS/SOCKS5 proxy URL (`socks5://host:1080`) |
+| `NO_PROXY` | `localhost,127.0.0.1,::1` | Comma-separated hosts to bypass proxy |
+
+### Section 11 — System Prompt
+| Variable | Default | Description |
+|----------|---------|-------------|
 | `SYSTEM_PROMPT_PATH` | `src/jarvis/prompt.txt` | Path to system prompt text file |
+
+### Section 12 — Yandex TTS
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `YC_API_KEY` | — | Yandex Cloud API key for SpeechKit |
+| `YC_FOLDER_ID` | — | Yandex Cloud folder ID |
+| `TTS_LANG` | `ru-RU` | TTS language code |
+
+### Section 13 — Temporary Files
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TEMP_DIR` | `.` | Directory for temporary audio files |
 
 ### TTS Voices
 
@@ -278,12 +352,18 @@ jarvis/
         ├── __init__.py
         ├── config.py          # Centralized config (typed, from .env)
         ├── main.py            # Orchestrator — wake → converse → sleep
-        ├── brain.py           # LLM client + [END] parsing
-        ├── listener.py        # VAD recording + Whisper STT
-        ├── prompt.txt         # System prompt (editable text file)
+        ├── brain.py           # Conversation manager (LLM + tools + history)
+        ├── llm.py             # Pure LLM client (OpenAI wrapper, no tools/history)
+        ├── tools.py           # Built-in tool defs + implementations (web_search)
+        ├── listener.py        # Facade: recorder + STT + pre-wake buffer
+        ├── recorder.py        # Audio capture (VAD + fixed duration)
+        ├── stt.py             # Speech-to-text (faster-whisper)
+        ├── speaker.py         # Facade: TTS + cancellable playback
+        ├── tts.py             # TTS generation backends (edge, say, espeak, yandex)
+        ├── player.py          # Audio playback (cancellable, afplay/ffplay/aplay)
+        ├── wake.py            # Vosk wake word + barge-in detection
         ├── sounds.py          # Audio feedback cues (beep, ticks)
-        ├── speaker.py         # TTS generation + async playback
-        └── wake.py            # Vosk wake word + barge-in detection
+        └── prompt.txt         # System prompt (editable text file)
 ```
 
 ### Architecture
@@ -293,20 +373,22 @@ flowchart TD
     A[💤 Waiting for wake word] -->|"say Джарвис"| B[🎙️ Conversation]
     B --> C[🎤 Listen with VAD]
     C --> D[📝 Transcribe with Whisper]
-    D --> E[🧠 LLM reasoning]
-    E --> F{"Has [END]?"}
-    F -->|No| G[🔊 Generate TTS + Play]
-    G -.->|"say Джарвис"| H[⏹️ Barge-in interrupt]
-    H -->|mic monitor| C
-    G -->|"playback ends"| C
-    G -->|silence timeout| A
-    F -->|Yes| I[🔊 Speak final response]
-    I --> A
+    D --> E[🧠 LLM reasoning with tools]
+    E -->|tool_call| F[🔧 web_search]
+    F --> E
+    E -->|text| G{"Has [END]?"}
+    G -->|No| H[🔊 Generate TTS + Play]
+    H -.->|"say Джарвис"| I[⏹️ Barge-in interrupt]
+    I -->|mic monitor| C
+    H -->|"playback ends"| C
+    H -->|silence timeout| A
+    G -->|Yes| J[🔊 Speak final response]
+    J --> A
 ```
 
-## Dependencies
+### Dependencies
 
-Defined in `pyproject.toml`:
+Defined in `pyproject.toml`. Install all: `uv sync`
 
 - `openai` — LLM API client
 - `python-dotenv` — environment variables
@@ -315,9 +397,8 @@ Defined in `pyproject.toml`:
 - `faster-whisper` — local speech-to-text (CTranslate2-based, fast)
 - `edge-tts` — Microsoft Edge TTS voice synthesis
 - `vosk` — offline speech recognition for wake word
-- `httpx` — HTTP client (for Yandex TTS)
-
-Install: `uv sync`
+- `httpx[socks]` — HTTP client (proxy support, SOCKS5, Yandex TTS)
+- `duckduckgo-search` — web search (built-in, no API key needed)
 
 ## Troubleshooting
 
@@ -329,10 +410,12 @@ Install: `uv sync`
 | TTS error (edge) | `edge-tts` needs internet. Check connection or switch to `say` backend. |
 | TTS error (say) | `TTS_BACKEND=say` requires macOS. Voice must be installed in System Settings → Accessibility → Spoken Content. |
 | TTS error (espeak) | Install espeak-ng: `brew install espeak-ng` (macOS) / `apt install espeak-ng` (Linux). |
-| Barge-in not working | Check `WAKE_MODE=true` and that the response text doesn't contain "джарвис" (echo protection). |
+| Barge-in not working | Check `WAKE_MODE=true` and that the response text doesn't contain the wake word (echo protection). |
 | Microphone not working | Check macOS permissions: System Settings → Privacy → Microphone |
 | Vosk model not found | Ensure `VOSK_MODEL_PATH` points to the unzipped model directory. |
 | LLM behaves poorly | Small models (<7B) struggle with conversation control. Use gemma-4-12b or larger. |
+| `thought_signature` error (Gemini) | The code automatically falls back to no-tools mode for Gemini models. Web search will be unavailable for that turn. |
+| Web search returns 0 results | DuckDuckGo may be blocked in your region. Try setting `HTTPS_PROXY` in `.env`. |
 
 ## Tips
 
