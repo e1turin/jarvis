@@ -102,10 +102,16 @@ def main():
                 stop_thinking_ticks()
                 result = thinking_result[0]
 
+                # ── Handle errors: print, skip TTS, skip history, keep listening ──
+                if result.is_error:
+                    print(f"❌ {result.text}\n")
+                    continue
+
                 # Commit to history (only if not interrupted)
                 brain.commit_turn(user_text, result)
 
                 if result.action == "end":
+                    print(f"{name}: {result.text}")
                     speaker.speak(result.text)
                     print("💤 LLM ended the conversation.\n")
                     should_sleep = True

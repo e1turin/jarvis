@@ -32,6 +32,7 @@ MAX_TOOL_ITERATIONS = 5
 class ChatResult(BaseModel):
     text: str
     action: str = "continue"  # "continue" or "end"
+    is_error: bool = False     # True = LLM/connection error, don't speak
 
 
 class ConversationManager:
@@ -99,11 +100,11 @@ class ConversationManager:
                     tools_disabled = True
                     response = self.llm.send(messages, tools=None)
                 else:
-                    return ChatResult(text=f"LLM Error: {e}", action="end")
+                    return ChatResult(text=f"LLM Error: {e}", action="end", is_error=True)
             except LLMConnectionError as e:
-                return ChatResult(text=str(e), action="end")
+                return ChatResult(text=str(e), action="end", is_error=True)
             except LLMTimeoutError as e:
-                return ChatResult(text=str(e), action="end")
+                return ChatResult(text=str(e), action="end", is_error=True)
 
             choice = response.choices[0]
             message = choice.message
