@@ -58,7 +58,7 @@ def search_web(query: str) -> str:
         return "Error: 'query' parameter is required"
 
     try:
-        from duckduckgo_search import DDGS
+        from ddgs import DDGS
 
         print(f"     🔍 Searching: {query}")
         results = []

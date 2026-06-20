@@ -8,7 +8,8 @@ from vosk import Model, KaldiRecognizer, SetLogLevel
 from jarvis.config import settings
 
 # Suppress verbose Vosk C++ LOG messages (they spam stderr on every load)
-SetLogLevel(-1)
+# -999 = absolutely everything off (word alignment warnings, etc.)
+SetLogLevel(-999)
 
 # Shared Vosk model instance (loaded once, reused by all detectors)
 _VOSK_MODEL: Model | None = None

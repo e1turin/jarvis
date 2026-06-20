@@ -398,7 +398,7 @@ Defined in `pyproject.toml`. Install all: `uv sync`
 - `edge-tts` — Microsoft Edge TTS voice synthesis
 - `vosk` — offline speech recognition for wake word
 - `httpx[socks]` — HTTP client (proxy support, SOCKS5, Yandex TTS)
-- `duckduckgo-search` — web search (built-in, no API key needed)
+- `ddgs` — web search via DuckDuckGo (built-in, no API key needed)
 
 ## Troubleshooting
 
