@@ -4,6 +4,7 @@ Generates WAV files on demand from configurable freq/duration/volume.
 Supports vibro/haptic feedback via system beep on supported Macs.
 """
 
+import atexit
 import os
 import subprocess
 import threading
@@ -14,6 +15,29 @@ from jarvis.config import settings
 
 
 _TEMP_DIR = settings.temp_dir
+
+# Track all async subprocesses so we can clean them up on exit
+_ASYNC_PROCS: list[subprocess.Popen] = []
+_ASYNC_PROCS_LOCK = threading.Lock()
+
+
+def _cleanup_async_procs():
+    """Wait for or kill any still-running async processes."""
+    with _ASYNC_PROCS_LOCK:
+        for p in _ASYNC_PROCS[:]:
+            if p.poll() is None:
+                try:
+                    p.wait(timeout=0.5)
+                except Exception:
+                    try:
+                        p.kill()
+                        p.wait(timeout=0.5)
+                    except Exception:
+                        pass
+            _ASYNC_PROCS.remove(p)
+
+
+atexit.register(_cleanup_async_procs)
 
 
 def _temp_path(name: str) -> str:
@@ -48,14 +72,16 @@ def _play_blocking(file_path: str):
 
 
 def _play_async(file_path: str):
-    """Play a WAV file with afplay (non-blocking)."""
+    """Play a WAV file with afplay (non-blocking, tracked for cleanup)."""
     try:
         if os.path.exists(file_path):
-            subprocess.Popen(
+            proc = subprocess.Popen(
                 ["afplay", file_path],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
+            with _ASYNC_PROCS_LOCK:
+                _ASYNC_PROCS.append(proc)
     except Exception:
         pass
 
@@ -70,11 +96,13 @@ def _tick_feedback():
     """Play tick or trigger haptic/vibro if available."""
     if settings.tick_vibro:
         try:
-            subprocess.Popen(
+            proc = subprocess.Popen(
                 ["osascript", "-e", "beep"],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
+            with _ASYNC_PROCS_LOCK:
+                _ASYNC_PROCS.append(proc)
         except Exception:
             _play_async(_temp_path("temp_tick.wav"))
     else:
@@ -112,12 +140,13 @@ def play_thinking_ticks():
 
 
 def stop_thinking_ticks():
-    """Stop the thinking ticks."""
+    """Stop the thinking ticks and clean up subprocesses."""
     _tick_stop.set()
     global _tick_thread
     if _tick_thread and _tick_thread.is_alive():
         _tick_thread.join(timeout=0.5)
     _tick_thread = None
+    _cleanup_async_procs()
 
 
 def _tick_loop():

@@ -47,7 +47,6 @@ class WakeWordDetector:
         print("   Press Ctrl+C to exit.")
 
         recognizer = KaldiRecognizer(self.model, self.sample_rate)
-        recognizer.SetWords(True)
         recognizer.SetPartialWords(True)
 
         self._pre_buffer.clear()
@@ -109,7 +108,6 @@ class WakeWordDetector:
         Keeps stream open continuously. Returns True if interrupted, False if playback finished.
         """
         recognizer = KaldiRecognizer(self.model, self.sample_rate)
-        recognizer.SetWords(True)
         recognizer.SetPartialWords(True)
 
         try:
